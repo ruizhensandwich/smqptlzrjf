@@ -50,6 +50,7 @@ python tools/promote.py runs/<run_id>      # 그 가중치를 weights/submission
 
 - `train.py`: 매 epoch 학습 1,296쌍 → 검증 164개 전체의 손실과 평균 PESQ-WB. **검증 PESQ가 가장 높은 epoch의 가중치**를 고릅니다. 검증 PESQ가 정체되면 학습률을 낮추고, 일정 기간 개선이 없으면 조기 종료합니다. 기록은 `runs/<run_id>/`와 `results/training_runs.csv`에 남습니다.
 - `evaluate.py`: `denoise.py`와 같은 코드로 만든 16비트 출력을 clean과 비교해 PESQ-WB와 SNR을 잽니다. 결과는 `results/experiments.csv`에 기록합니다.
+- `tools/spectrogram.py`: 같은 파일에 대해 Noisy·Clean·각 모델 출력의 스펙트로그램(같은 축·색 범위)과 PESQ/SNR, 같은 재생 게인의 WAV를 `results/listening/<시각>/index.html` 한 페이지로 만듭니다. 결과에는 수강생 녹음이 들어 있어 저장소에 올리지 않습니다.
 - `tools/model_board.py`: 지금까지 평가한 모든 모델의 비교표(PESQ 기록, SNR·조건별 점수, 일반화 차, 학습·추론 비용, 장점·단점)를 [`results/model_board.md`](results/model_board.md)에 씁니다. `train.py`·`evaluate.py` 출력 끝에도 표시됩니다.
 - 리눅스 GPU 서버(GCP, RunPod): `bash setup.sh` 한 번이면 학습 환경이 준비됩니다.
 
@@ -63,4 +64,4 @@ python tools/promote.py runs/<run_id>      # 그 가중치를 weights/submission
 | `train.py`, `evaluate.py`, `compare.py` | 학습, 채점, 두 실험 비교 |
 | `configs/` | 실험 설정 (모델 구조, 학습 하이퍼파라미터) |
 | `results/` | 실험 기록(`experiments.csv`, `training_runs.csv`), 모델 비교표(`model_board.md`), 회차별 제출 결과(`submissions/roundN/`) |
-| `tools/` | 제출 기록·태그(`release.py`), 제출 전 점검(`check_submission.py`), 가중치 지정(`promote.py`), 모델 비교표(`model_board.py`), 공개 전 보안 검사(`secret_scan.py`) |
+| `tools/` | 제출 기록·태그(`release.py`), 제출 전 점검(`check_submission.py`), 가중치 지정(`promote.py`), 모델 비교표(`model_board.py`), 스펙트로그램·청취(`spectrogram.py`), 공개 전 보안 검사(`secret_scan.py`) |

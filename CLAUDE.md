@@ -17,7 +17,7 @@ validation 164쌍·화자 5명, 3초, 잡음 범주 23개, SNR 0/5/10/15 dB).
 - push: 일반 커밋과 제출 태그는 Claude가 push한다(사용자 요청). 런어스 비밀글 제출은 팀장이 직접.
 
 ## 환경 / 명령
-로컬(Windows): conda 환경 `se2` (Python 3.12, conda-forge pesq 0.0.4, torch 2.15.0+cpu — 배포 노트북과 같은 버전).
+로컬(Windows): conda 환경 `se2` (Python 3.12, conda-forge pesq 0.0.4, torch 2.15.0+cpu — 배포 노트북과 같은 버전). numpy BLAS는 **OpenBLAS**로 둔다: conda-forge MKL은 LLVM OpenMP(libomp)를 불러 torch의 libiomp5md와 충돌한다(OMP Error #15, matplotlib 그림에서 발생).
 `PYTHONIOENCODING=utf-8 conda run --no-capture-output -n se2 python <script>`
 GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gcloud config get project`, 또는 RunPod): `bash setup.sh` → `source .venv/bin/activate`. 긴 학습은 `tmux` 안에서. Spot이 끊기면 `python train.py --resume runs/<id>`.
 
@@ -28,6 +28,7 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
 | 이어서 학습 | `python train.py --resume runs/<run_id>` |
 | 채점 (16비트 출력 기준) | `python evaluate.py --weights runs/<id>/best.pt --split all --tag T` |
 | 모델 비교표 (모든 모델의 PESQ·장단점) | `python tools/model_board.py` → `results/model_board.md` |
+| 스펙트로그램·청취 비교 | `python tools/spectrogram.py --models runs/<A> runs/<B> [--pick diverse\|worst\|best --n 4]` / `<segment_id> ...` / `--noisy any.wav [--clean ref.wav]` → `results/listening/<time>/index.html` (학생 녹음 포함: git 제외·공개 금지) |
 | 두 실행 비교 | `python compare.py <runA> <runB> [--split train]` |
 | 제출 가중치 지정 | `python tools/promote.py runs/<run_id>` → `weights/submission.pt` |
 | 공개 전 보안 검사 | `python tools/secret_scan.py` |
@@ -49,7 +50,7 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
 1. 설정 파일 하나 = 실험 하나. `--note`에 무엇을 바꿨는지.
 2. `train.py`(validation PESQ로 epoch 선택) → 끝나면 자동으로 `evaluate.py --split all`(train 1,296 + validation 164 전체, 16비트 출력) → 모델 비교표.
 3. **사용자에게 새 모델 결과를 보고할 때는 응답 맨 끝에 `results/model_board.md`의 비교표 전체를 붙인다** (사용자 요청, 2026-11-21).
-4. `compare.py`로 SNR·난이도·잡음 범주별로 손해 보는 그룹이 없는지 본다(평균만 보지 말 것).
+4. `compare.py`로 SNR·난이도·잡음 범주별로 손해 보는 그룹이 없는지 본다(평균만 보지 말 것). `tools/spectrogram.py --pick worst`로 손해 본 파일을 보고 듣는다(공지: 잡음 감소와 말소리 보존을 소리·스펙트로그램으로 확인).
 5. `pytest` 통과 후 커밋.
 
 ## 제출 절차 (팀당 주 1회, 최초 제출은 횟수 제외)
@@ -65,3 +66,4 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
 - 배포 예제 MaskCNN(seed 42, 109 epoch 중 89 epoch 선택): validation 1.692 (노트북 float 채점).
 - 이 저장소의 `train.py`로 CPU 재현(2026-11-21, `runs/20261121-175901_baseline_repro`, 9.8분): 109 epoch 모두 손실·PESQ 차이 0, 선택 가중치가 배포 가중치와 비트 단위로 같음. 현재 `weights/submission.pt`.
   16비트 출력 채점: **validation 1.6922 / SNR 13.06 dB, train 1.8776 / 13.11 dB** (입력 1.395 / 1.470). train 개선 +0.41 대 validation +0.30.
+  약점(스펙트로그램): 저역 잡음(바람·차량 실내)을 지울 때 300 Hz 아래 말소리 배음까지 지운다 — validation에서 가장 손해 본 3개 파일(traffic 15 dB −0.61, wind 15 dB −0.56, volvo 5 dB −0.45)이 모두 이 경우.

@@ -18,6 +18,8 @@ docs/ai_usage/
 /runs/
 results/runs/
 results/figures/
+# tools/spectrogram.py output: figures + WAVs of students' recordings
+results/listening/
 
 # Credentials: never commit (cloud keys, SSH keys, tokens)
 .env

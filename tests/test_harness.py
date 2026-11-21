@@ -26,6 +26,7 @@ def test_secret_scan_blocks_keys_data_and_reports(tmp_path):
         "data/train/samples.csv": "a,b\n",
         "input/x.wav": "RIFF",
         "docs/ai_usage/round1.json": "{}",
+        "results/listening/x/index.html": "<audio>",
         ".env": "TOKEN=1",
         "conf.py": "KEY = 'AIza" + "A" * 35 + "'\n",
     }

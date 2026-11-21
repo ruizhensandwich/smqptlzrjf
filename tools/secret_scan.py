@@ -6,7 +6,7 @@
 Fails (exit 1) on:
   * credentials: private keys, cloud service-account JSON, API keys/tokens,
     SSH keys (google_compute_engine*, id_*), .env files
-  * data: any audio file, anything under data/ (students' recordings)
+  * data: any audio file, anything under data/ or results/listening/ (students' recordings)
   * the AI usage report folder docs/ai_usage/ (submitted privately)
   * files over 95 MB (GitHub refuses them)
 Installed as a git pre-push hook by `git config core.hooksPath .githooks`.
@@ -52,6 +52,9 @@ def scan(files: list[str], root: Path = ROOT) -> list[str]:
             continue
         if rel.startswith("data/") or AUDIO.search(rel):
             problems.append(f"{rel}: 데이터·음성 파일 (수강생 녹음, 공개 금지)")
+            continue
+        if rel.startswith(("results/listening/", "results/figures/")):
+            problems.append(f"{rel}: 청취·스펙트로그램 결과 (수강생 녹음 포함)")
             continue
         if rel.startswith("docs/ai_usage/"):
             problems.append(f"{rel}: AI 활용 내역서는 비공개")

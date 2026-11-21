@@ -1,0 +1,6 @@
+# Training, evaluation and tests (train.py, evaluate.py, compare.py, tools/, pytest)
+-r requirements.txt
+pesq==0.0.4          # same version as the TA's scoring; on Windows install it from conda-forge
+pandas>=2.1,<4
+pytest>=8
+matplotlib>=3.8

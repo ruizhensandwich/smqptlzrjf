@@ -1,0 +1,3 @@
+date,run_id,tag,split,method,n,pesq,snr_db,pesq_failed,weights,weights_sha,code_fingerprint,note
+2026-11-21 17:54,20261121-175347_course_example,course_example,validation,noisy_input,164,1.3947,9.634,0,weights/submission.pt,cf776572ecfb,144345ee99a3,"course example weights, validation"
+2026-11-21 17:54,20261121-175347_course_example,course_example,validation,course_example,164,1.6922,13.060,0,weights/submission.pt,cf776572ecfb,144345ee99a3,"course example weights, validation"

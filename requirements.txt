@@ -1,0 +1,5 @@
+# Needed to run denoise.py (inference). CPU is enough; a CUDA build of torch is used if installed.
+torch>=2.1
+numpy>=1.26,<3
+scipy>=1.12,<2
+soundfile>=0.12,<1

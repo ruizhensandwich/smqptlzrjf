@@ -1,0 +1,12 @@
+{
+  "model": "mask_cnn",
+  "model_args": {"n_fft": 512, "hop": 128, "hidden_channels": [64, 64], "kernel_sizes": [5, 3, 1]},
+  "loss": "log_mag_l1",
+  "train": {
+    "seed": 42, "batch_size": 16, "lr": 0.001, "adam_betas": [0.9, 0.999], "weight_decay": 0.0,
+    "max_epochs": 200, "min_epochs": 30, "patience": 20, "min_delta": 0.001,
+    "lr_factor": 0.5, "lr_patience": 5, "min_lr": 1e-05,
+    "save_epochs": [10, 20, 40, 80]
+  },
+  "note": "course notebook example (MaskCNN, log-magnitude L1)"
+}

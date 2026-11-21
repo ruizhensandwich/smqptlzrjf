@@ -1,0 +1,45 @@
+# Course data: students' recordings, never public (also blocked by tools/secret_scan.py)
+/data/
+*.wav
+*.flac
+*.npy
+.waveform_cache/
+
+# Submission I/O folders: keep the folders, not the audio
+input/*
+!input/.gitkeep
+output/*
+!output/.gitkeep
+
+# AI usage reports are submitted privately (Learn Us secret post), never published here
+docs/ai_usage/
+
+# Training runs (checkpoints, history); results/training_runs.csv and weights/ ARE committed
+/runs/
+results/runs/
+results/figures/
+
+# Credentials: never commit (cloud keys, SSH keys, tokens)
+.env
+.env.*
+*.pem
+*.ppk
+*.p12
+id_rsa*
+id_ed25519*
+google_compute_engine*
+credentials.json
+application_default_credentials.json
+client_secret*.json
+*service-account*.json
+
+# Python / tools
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.ipynb_checkpoints/
+.claude/settings.local.json
+*.tmp
+~$*
+runs_*.log

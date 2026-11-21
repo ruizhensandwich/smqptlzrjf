@@ -19,7 +19,7 @@ validation 164쌍·화자 5명, 3초, 잡음 범주 23개, SNR 0/5/10/15 dB).
 ## 환경 / 명령
 로컬(Windows): conda 환경 `se2` (Python 3.12, conda-forge pesq 0.0.4, torch 2.15.0+cpu — 배포 노트북과 같은 버전).
 `PYTHONIOENCODING=utf-8 conda run --no-capture-output -n se2 python <script>`
-GPU 서버(GCP 프로젝트 `seojinee12`, 서울 L4/T4 할당량 1, 또는 RunPod): `bash setup.sh` → `source .venv/bin/activate`. 긴 학습은 `tmux` 안에서. Spot이 끊기면 `python train.py --resume runs/<id>`.
+GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gcloud config get project`, 또는 RunPod): `bash setup.sh` → `source .venv/bin/activate`. 긴 학습은 `tmux` 안에서. Spot이 끊기면 `python train.py --resume runs/<id>`.
 
 | 목적 | 명령 |
 |---|---|

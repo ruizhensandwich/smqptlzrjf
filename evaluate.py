@@ -14,7 +14,8 @@ Clean speech is read only here (and in train.py), never by denoise.py.
 
 Writes results/runs/<run_id>/<split>/ (per_file.csv, summary.csv,
 run_config.json; git-ignored) and appends one line per method and split to
-results/experiments.csv (committed).
+results/experiments.csv (committed). A run over all validation files is added to
+the model board (results/model_board.csv), which is printed at the end.
 """
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ import json
 import os
 import platform
 import sys
+import time
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -41,6 +43,7 @@ from se.checkpoint import load_model  # noqa: E402
 from se.data import data_root, load_waveforms, read_manifest  # noqa: E402
 from se.inference import as_written, enhance_channels, pick_device  # noqa: E402
 from se.metrics import score_pair  # noqa: E402
+from tools import model_board  # noqa: E402
 from tools.common import fingerprint, round_dir  # noqa: E402
 
 SUBMISSION_WEIGHTS = HERE / "weights" / "submission.pt"
@@ -54,7 +57,8 @@ def file_sha(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()[:12]
 
 
-def score_split(split, model, device, method, n, pool) -> tuple[list[dict], int]:
+def score_split(split, model, device, method, n, pool) -> tuple[list[dict], int, float]:
+    """(per-file rows, files, real-time factor = inference seconds / audio seconds)."""
     root = data_root()
     rows = read_manifest(split, root)
     waves = load_waveforms(split, root)
@@ -63,9 +67,13 @@ def score_split(split, model, device, method, n, pool) -> tuple[list[dict], int]
     subtype = sf.info(str(root / rows[0]["noisy_path"])).subtype
     noisy = waves[:, 0].astype(np.float64)
     clean = waves[:, 1].astype(np.float64)
-    outputs = []
+    outputs, infer_s = [], 0.0
     for i in range(len(rows)):
+        t0 = time.perf_counter()
         y = enhance_channels(model, noisy[i][:, None], SAMPLE_RATE, device)[:, 0]
+        if device.type == "cuda":
+            torch.cuda.synchronize()
+        infer_s += time.perf_counter() - t0
         outputs.append(as_written(y, SAMPLE_RATE, subtype))
     per_file = []
     for name, est in (("noisy_input", noisy), (method, outputs)):
@@ -73,7 +81,7 @@ def score_split(split, model, device, method, n, pool) -> tuple[list[dict], int]
             per_file.append({"segment_id": r["segment_id"], "method": name, "pesq": p,
                              "snr_db": s, "pesq_error": err,
                              **{k: r[k] for k in INFO_COLUMNS}})
-    return per_file, len(rows)
+    return per_file, len(rows), infer_s / (noisy.size / SAMPLE_RATE)
 
 
 def summarize(per_file: list[dict]) -> list[dict]:
@@ -118,6 +126,7 @@ def main(argv=None) -> int:
                     "splits into results/submissions/roundN/")
     ap.add_argument("--device", default="auto")
     ap.add_argument("--workers", type=int, default=min(8, os.cpu_count() or 1))
+    ap.add_argument("--no-board", action="store_true", help="do not add this run to the model board")
     args = ap.parse_args(argv)
 
     if args.round is not None:
@@ -139,9 +148,12 @@ def main(argv=None) -> int:
     fp = fingerprint()
     meta = {k: v for k, v in ckpt["meta"].items() if k != "config"}
 
+    per_split, rtf = {}, None
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
         for split in splits:
-            per_file, n = score_split(split, model, device, method, args.n, pool)
+            per_file, n, split_rtf = score_split(split, model, device, method, args.n, pool)
+            per_split[split] = per_file
+            rtf = split_rtf if split == "validation" or rtf is None else rtf
             summary = summarize(per_file)
             if args.round is not None:
                 out = round_dir(args.round) / ("train" if split == "train" else "")
@@ -157,7 +169,7 @@ def main(argv=None) -> int:
                     "model_args": ckpt["model_args"], "checkpoint_meta": meta,
                     "code_fingerprint": fp, "device": str(device), "torch": str(torch.__version__),
                     "python": platform.python_version(), "scored_as": "written PCM_16, read back",
-                    "note": args.note}
+                    "rtf": round(split_rtf, 4), "note": args.note}
             (out / "run_config.json").write_text(json.dumps(info, indent=2, ensure_ascii=False)
                                                  + "\n", encoding="utf-8")
             new = not LOG.exists()
@@ -183,6 +195,16 @@ def main(argv=None) -> int:
             except ValueError:
                 shown = str(out)
             print(f"  -> {shown}")
+
+    # model board: every model so far, side by side (only full-validation runs go on it;
+    # a --round run re-scores weights that are already there)
+    if "validation" in per_split and not args.n and args.round is None and not args.no_board:
+        row = model_board.make_row(per_split, method, {
+            **model_board.run_facts(ckpt, weights), "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "run_id": run_id, "tag": args.tag or ckpt["model"], "weights_sha": file_sha(weights),
+            "rtf": round(rtf, 4), "infer_device": str(device), "note": args.note})
+        model_board.save_row(row)
+    print("\n" + model_board.show())
     return 0
 
 

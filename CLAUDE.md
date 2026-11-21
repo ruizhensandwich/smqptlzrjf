@@ -24,9 +24,10 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
 | 목적 | 명령 |
 |---|---|
 | 테스트 | `python -m pytest -q` |
-| 학습 | `python train.py --config configs/X.json --tag T [--set train.lr=5e-4] --note "..."` |
+| 학습 (끝나면 자동 채점 + 모델 비교표) | `python train.py --config configs/X.json --tag T [--set train.lr=5e-4] --note "..."` |
 | 이어서 학습 | `python train.py --resume runs/<run_id>` |
 | 채점 (16비트 출력 기준) | `python evaluate.py --weights runs/<id>/best.pt --split all --tag T` |
+| 모델 비교표 (모든 모델의 PESQ·장단점) | `python tools/model_board.py` → `results/model_board.md` |
 | 두 실행 비교 | `python compare.py <runA> <runB> [--split train]` |
 | 제출 가중치 지정 | `python tools/promote.py runs/<run_id>` → `weights/submission.pt` |
 | 공개 전 보안 검사 | `python tools/secret_scan.py` |
@@ -39,15 +40,17 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
 ## 구조
 - `se/`: `models.py`(MODELS 레지스트리, 모델은 `enhance(noisy[B,T]) -> [B,T]`), `losses.py`(LOSSES, `loss(model, noisy, clean)`), `config.py`(기본값 = 배포 노트북, 모르는 키는 오류), `data.py`(DATA_ROOT 또는 `data/`, 파형 캐시), `checkpoint.py`(가중치+모델 설정+학습 정보를 한 파일에), `inference.py`(denoise와 evaluate가 공유, 16비트로 쓰고 다시 읽은 값으로 채점), `metrics.py`.
 - 새 모델·손실: `se/models.py`·`se/losses.py`에 등록 → `configs/`에 설정 파일 → train → evaluate.
-- `results/experiments.csv`(채점 기록), `results/training_runs.csv`(학습 기록), `results/submissions/roundN/` 커밋함. `runs/`는 git 제외.
+- `results/experiments.csv`(채점 기록), `results/training_runs.csv`(학습 기록), `results/model_board.csv`·`.md`(모델 비교표), `results/submissions/roundN/` 커밋함. `runs/`는 git 제외.
+- **모델 비교표**(`tools/model_board.py`): validation 전체를 채점한 모든 모델을 한 표에 (Val PESQ·ΔPESQ·SNR, 0 dB·15 dB·hard, 입력보다 나빠진 파일 비율, Train PESQ, 일반화 차 = train 개선 − validation 개선, 학습 epoch·시간, 추론 속도) + 모델별 장점·단점(다른 모델 대비 자동 판정, 잡음 범주는 train 기준). evaluate.py와 train.py 출력 끝에 찍힌다. 같은 가중치는 한 줄.
 - `submissions.json`과 README의 `<!-- submissions -->`·`<!-- reproduce -->` 블록은 `release.py`가 쓴다. 직접 편집 금지.
 - `docs/ai_usage/`: 1차 양식 `template.hwpx` 그대로(2차 새 양식 없음). Part 3~6 제목만 딥러닝에 맞춤.
 
 ## 실험 프로토콜
 1. 설정 파일 하나 = 실험 하나. `--note`에 무엇을 바꿨는지.
-2. `train.py`(validation PESQ로 epoch 선택) → `evaluate.py --split all`로 train 1,296 + validation 164 전체를 16비트 출력으로 채점.
-3. `compare.py`로 SNR·난이도·잡음 범주별로 손해 보는 그룹이 없는지 본다(평균만 보지 말 것).
-4. `pytest` 통과 후 커밋.
+2. `train.py`(validation PESQ로 epoch 선택) → 끝나면 자동으로 `evaluate.py --split all`(train 1,296 + validation 164 전체, 16비트 출력) → 모델 비교표.
+3. **사용자에게 새 모델 결과를 보고할 때는 응답 맨 끝에 `results/model_board.md`의 비교표 전체를 붙인다** (사용자 요청, 2026-11-21).
+4. `compare.py`로 SNR·난이도·잡음 범주별로 손해 보는 그룹이 없는지 본다(평균만 보지 말 것).
+5. `pytest` 통과 후 커밋.
 
 ## 제출 절차 (팀당 주 1회, 최초 제출은 횟수 제외)
 1. `pytest` 통과 → `tools/promote.py runs/<id>` → `weights/submission.pt`

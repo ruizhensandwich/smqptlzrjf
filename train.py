@@ -14,7 +14,9 @@ Writes runs/<run_id>/ (git-ignored):
     config.json   resolved config         history.csv   one row per epoch
     best.pt       best weights (se-ckpt)  epoch_XXXX.pt weights at train.save_epochs
     last.pt       state for --resume      summary.json  result and settings
-and appends one line to results/training_runs.csv (committed).
+and appends one line to results/training_runs.csv (committed). Then the best
+weights are scored as submitted (evaluate.py --split all, 16-bit output) and the
+model board with every model so far is printed (skip with --no-eval).
 Promote a run to the submission weights with  python tools/promote.py runs/<run_id>
 """
 from __future__ import annotations
@@ -118,6 +120,8 @@ def main(argv=None) -> int:
     ap.add_argument("--workers", type=int, default=min(8, os.cpu_count() or 1),
                     help="processes for validation PESQ")
     ap.add_argument("--resume", type=Path, help="run folder to continue")
+    ap.add_argument("--no-eval", action="store_true",
+                    help="skip the final evaluate.py --split all (and the model board)")
     args = ap.parse_args(argv)
 
     if args.resume:
@@ -240,11 +244,17 @@ def main(argv=None) -> int:
                 "device": str(device), "torch": str(torch.__version__),
                 "config": " ".join([config_path] + [f"--set {s}" for s in meta_base["overrides"]]),
                 "note": cfg.get("note", "")})
+    best_rel = (run_dir / "best.pt").relative_to(HERE).as_posix()
     print(f"done ({stop_reason}, {epoch} epochs): best validation PESQ {best_pesq:.4f} at epoch "
-          f"{best_epoch} -> {run_dir / 'best.pt'}\n"
-          f"next: python evaluate.py --weights {(run_dir / 'best.pt').relative_to(HERE).as_posix()} "
-          f"--split all --tag {args.tag or 'run'}")
-    return 0
+          f"{best_epoch} -> {best_rel}", flush=True)
+    if args.no_eval:
+        print(f"next: python evaluate.py --weights {best_rel} --split all --tag {args.tag or run_id}")
+        return 0
+    # score the chosen weights as submitted (16-bit, train + validation) and show the model board
+    import evaluate
+    return evaluate.main(["--weights", best_rel, "--split", "all", "--device", args.device,
+                          "--tag", args.tag or run_id, "--note", cfg.get("note", ""),
+                          "--workers", str(args.workers)])
 
 
 if __name__ == "__main__":

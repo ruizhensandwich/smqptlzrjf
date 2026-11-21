@@ -1,3 +1,7 @@
 date,run_id,tag,split,method,n,pesq,snr_db,pesq_failed,weights,weights_sha,code_fingerprint,note
 2026-11-21 17:54,20261121-175347_course_example,course_example,validation,noisy_input,164,1.3947,9.634,0,weights/submission.pt,cf776572ecfb,144345ee99a3,"course example weights, validation"
 2026-11-21 17:54,20261121-175347_course_example,course_example,validation,course_example,164,1.6922,13.060,0,weights/submission.pt,cf776572ecfb,144345ee99a3,"course example weights, validation"
+2026-11-21 18:10,20261121-180928_baseline_repro,baseline_repro,train,noisy_input,1296,1.4704,9.691,0,runs/20261121-175901_baseline_repro/best.pt,43f3b7140c57,b69eecf32e25,own CPU reproduction of the course example (identical weights to the course best_mask_cnn.pt)
+2026-11-21 18:10,20261121-180928_baseline_repro,baseline_repro,train,baseline_repro,1296,1.8776,13.115,0,runs/20261121-175901_baseline_repro/best.pt,43f3b7140c57,b69eecf32e25,own CPU reproduction of the course example (identical weights to the course best_mask_cnn.pt)
+2026-11-21 18:10,20261121-180928_baseline_repro,baseline_repro,validation,noisy_input,164,1.3947,9.634,0,runs/20261121-175901_baseline_repro/best.pt,43f3b7140c57,b69eecf32e25,own CPU reproduction of the course example (identical weights to the course best_mask_cnn.pt)
+2026-11-21 18:10,20261121-180928_baseline_repro,baseline_repro,validation,baseline_repro,164,1.6922,13.060,0,runs/20261121-175901_baseline_repro/best.pt,43f3b7140c57,b69eecf32e25,own CPU reproduction of the course example (identical weights to the course best_mask_cnn.pt)

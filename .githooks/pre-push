@@ -2,9 +2,11 @@
 # Block keys, data, reports and >95 MB files before anything reaches GitHub.
 # Enable once per clone:  git config core.hooksPath .githooks
 cd "$(git rev-parse --show-toplevel)" || exit 1
-for py in python3 python; do
-  if command -v "$py" >/dev/null 2>&1; then
+# First interpreter that really runs (Windows' "python3" may be a Store shortcut that does not).
+for py in python python3 py; do
+  if command -v "$py" >/dev/null 2>&1 && "$py" -c "import sys" >/dev/null 2>&1; then
     exec "$py" tools/secret_scan.py --staged
   fi
 done
-echo "pre-push: python not found, secret scan skipped" >&2
+echo "pre-push: no working python found; run python tools/secret_scan.py yourself" >&2
+exit 1

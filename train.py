@@ -250,16 +250,17 @@ def main(argv=None) -> int:
                 "device": str(device), "torch": str(torch.__version__),
                 "config": " ".join([config_path] + [f"--set {s}" for s in meta_base["overrides"]]),
                 "note": cfg.get("note", "")})
+    tag = args.tag or run_id.split("_", 1)[-1]
     best_rel = (run_dir / "best.pt").relative_to(HERE).as_posix()
     print(f"done ({stop_reason}, {epoch} epochs): best validation PESQ {best_pesq:.4f} at epoch "
           f"{best_epoch} -> {best_rel}", flush=True)
     if args.no_eval:
-        print(f"next: python evaluate.py --weights {best_rel} --split all --tag {args.tag or run_id.split("_", 1)[-1]}")
+        print(f"next: python evaluate.py --weights {best_rel} --split all --tag {tag}")
         return 0
     # score the chosen weights as submitted (16-bit, train + validation) and show the model board
     import evaluate
     return evaluate.main(["--weights", best_rel, "--split", "all", "--device", args.device,
-                          "--tag", args.tag or run_id.split("_", 1)[-1], "--note", cfg.get("note", ""),
+                          "--tag", tag, "--note", cfg.get("note", ""),
                           "--workers", str(args.workers)])
 
 

@@ -84,7 +84,8 @@ def weights_info() -> dict:
                                                      "lr_patience", "min_lr", "optimizer",
                                                      "scheduler", "lr_gamma", "discriminator",
                                                      "data.segment_seconds", "data.remix_prob",
-                                                     "data.remix_snr_db", "data.gain_db")
+                                                     "data.remix_snr_db", "data.gain_db",
+                                                     "data.speed_factors", "data.speed_prob")
                                if k in t},
             "weights_mb": round(WEIGHTS.stat().st_size / 2 ** 20, 2)}
 

@@ -1,0 +1,18 @@
+{
+  "model": "mpsenet",
+  "model_args": {"n_fft": 400, "hop": 100, "win": 400, "dense_channel": 64, "num_tsblocks": 4,
+                 "n_heads": 4, "beta": 2.0, "compress_factor": 0.3},
+  "loss": "mpsenet",
+  "discriminator": "metric",
+  "data": {"segment_seconds": 2.0, "remix_prob": 0.8, "remix_snr_db": [-5.0, 20.0],
+           "gain_db": [0.0, 0.0],
+           "speed_factors": [0.9, 0.95, 1.05, 1.1], "speed_prob": 0.5},
+  "train": {
+    "seed": 1234, "batch_size": 4, "val_batch_size": 4,
+    "optimizer": "adamw", "lr": 0.0005, "adam_betas": [0.8, 0.99], "weight_decay": 0.01,
+    "scheduler": "exponential", "lr_gamma": 0.99,
+    "max_epochs": 150, "min_epochs": 40, "patience": 25, "min_delta": 0.01,
+    "save_epochs": [25, 50, 75, 100, 125]
+  },
+  "note": "MP-SENet, stronger data for generalisation: remix 0.8 (was 0.5) + speed 0.9-1.1 on half of the remixed items; everything else as mpsenet_remix50"
+}

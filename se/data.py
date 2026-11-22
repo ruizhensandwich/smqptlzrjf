@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import csv
 import os
+from fractions import Fraction
 from hashlib import sha256
 from io import StringIO
 from pathlib import Path
@@ -21,6 +22,7 @@ from tempfile import TemporaryDirectory
 import numpy as np
 import soundfile as sf
 import torch
+from scipy.signal import resample_poly
 from torch.utils.data import Dataset
 
 from se import SAMPLE_RATE
@@ -154,21 +156,34 @@ class RemixedSpeech(Dataset):
     clean) or, with probability remix_prob, its clean speech plus the noise of
     another train pair (noisy - clean of a random usable file, its own random
     segment) at a random SNR. SNR is defined like the dataset's: power of the
-    whole clean file over power of the whole noise file. Nothing is written to
-    disk; the draws come from torch's global generator, so train.py's seed
-    reproduces them. Only train data is used: the speakers and noise recordings
-    are the same, only their combinations and levels are new.
+    whole clean file over power of the whole noise file.
+
+    A remixed item's speech is, with probability speed_prob, first played at
+    one of speed_factors (0.9 = 10 % slower and lower, 1.1 = faster and
+    higher; polyphase resampling). That changes tempo, pitch and formants
+    together, so the 35 train speakers sound like more voices. It is only
+    possible for remixed items, where the noisy signal is built from the
+    clean one.
+
+    Nothing is written to disk; the draws come from torch's global generator,
+    so train.py's seed reproduces them. Only train data is used: the noise
+    recordings are the same, their combinations, levels and the voices vary.
     """
 
     def __init__(self, base: PairedSpeech, segment_samples: int = 0, remix_prob: float = 0.0,
-                 snr_db=(-5.0, 20.0), gain_db=(0.0, 0.0)):
+                 snr_db=(-5.0, 20.0), gain_db=(0.0, 0.0), speed_factors=(), speed_prob: float = 0.0):
         n = base.waveforms.shape[-1]
-        if not 0 <= segment_samples <= n or not 0 <= remix_prob <= 1:
-            raise ValueError(f"need 0 <= segment_samples <= {n} and 0 <= remix_prob <= 1")
+        if not 0 <= segment_samples <= n or not 0 <= remix_prob <= 1 or not 0 <= speed_prob <= 1:
+            raise ValueError(f"need 0 <= segment_samples <= {n} and probabilities in [0, 1]")
         if snr_db[0] > snr_db[1] or gain_db[0] > gain_db[1]:
             raise ValueError("snr_db and gain_db are [low, high]")
+        if any(not 0.5 <= f <= 2.0 for f in speed_factors):
+            raise ValueError("speed_factors must be within [0.5, 2]")
         self.base, self.segment = base, segment_samples or n
         self.remix_prob, self.snr_db, self.gain_db = remix_prob, tuple(snr_db), tuple(gain_db)
+        self.speed_prob = speed_prob if speed_factors else 0.0
+        # speed f = resample by 1 / f: f = 19/20 -> up 20, down 19
+        self.speed_ratios = [Fraction(float(f)).limit_denominator(100) for f in speed_factors]
         self.material, self.excluded = [], {}
         if remix_prob > 0:
             w = base.waveforms.numpy()
@@ -188,33 +203,49 @@ class RemixedSpeech(Dataset):
     def __len__(self):
         return len(self.base)
 
-    def _start(self) -> int:
-        room = self.base.waveforms.shape[-1] - self.segment
-        return int(torch.randint(0, room + 1, (1,))) if room > 0 else 0
+    @staticmethod
+    def _randint(high: int) -> int:
+        return int(torch.randint(0, high, (1,))) if high > 1 else 0
 
     @staticmethod
     def _uniform(low: float, high: float) -> float:
         return low + (high - low) * float(torch.rand(()))
 
+    def _segment(self, x: torch.Tensor) -> torch.Tensor:
+        """A random segment of x (zero-padded at the end if x is shorter)."""
+        room = x.shape[-1] - self.segment
+        if room < 0:
+            return torch.nn.functional.pad(x, (0, -room))
+        a = self._randint(room + 1)
+        return x[a:a + self.segment]
+
+    def _remixed(self, i: int):
+        clean = self.base.waveforms[i, 1]
+        power = self.clean_power[i]
+        if self.speed_prob > 0 and float(torch.rand(())) < self.speed_prob:
+            ratio = self.speed_ratios[self._randint(len(self.speed_ratios))]
+            clean = torch.from_numpy(resample_poly(
+                clean.numpy().astype(np.float64), ratio.denominator, ratio.numerator)).float()
+            power = clean.double().pow(2).mean()
+        clean_seg = self._segment(clean)
+        j = self.material[self._randint(len(self.material))]
+        noise = self.base.waveforms[j, 0] - self.base.waveforms[j, 1]
+        if self.segment == noise.shape[-1]:           # whole file: shift the noise in time instead
+            noise = torch.roll(noise, self._randint(self.segment))
+        else:
+            noise = self._segment(noise)
+        snr = self._uniform(*self.snr_db)
+        scale = torch.sqrt(power / (self.noise_power[j] * 10 ** (snr / 10)))
+        return clean_seg + noise * scale.float(), clean_seg
+
     def __getitem__(self, i):
-        noisy, clean = self.base.waveforms[i]
-        a = self._start()
-        clean_seg = clean[a:a + self.segment]
         if self.remix_prob > 0 and float(torch.rand(())) < self.remix_prob \
                 and float(self.clean_power[i]) > 0:
-            j = self.material[int(torch.randint(0, len(self.material), (1,)))]
-            b = self._start()
-            if self.segment == noisy.shape[-1]:       # whole file: shift the noise in time instead
-                b = int(torch.randint(0, self.segment, (1,)))
-                noise = torch.roll(self.base.waveforms[j, 0] - self.base.waveforms[j, 1], b)
-            else:
-                noise = self.base.waveforms[j, 0, b:b + self.segment] \
-                    - self.base.waveforms[j, 1, b:b + self.segment]
-            snr = self._uniform(*self.snr_db)
-            scale = torch.sqrt(self.clean_power[i] / (self.noise_power[j] * 10 ** (snr / 10)))
-            noisy_seg = clean_seg + noise * scale.float()
+            noisy_seg, clean_seg = self._remixed(i)
         else:
-            noisy_seg = noisy[a:a + self.segment]
+            noisy, clean = self.base.waveforms[i]
+            a = self._randint(noisy.shape[-1] - self.segment + 1)
+            noisy_seg, clean_seg = noisy[a:a + self.segment], clean[a:a + self.segment]
         gain = 10 ** (self._uniform(*self.gain_db) / 20)
         peak = float(noisy_seg.abs().max()) * gain
         if peak > 0.99:                               # keep the mixture inside full scale

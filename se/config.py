@@ -46,6 +46,8 @@ DATA_DEFAULTS = {
     "remix_prob": 0.0,               # share of items whose noise comes from another train pair
     "remix_snr_db": [-5.0, 20.0],    # SNR range of remixed items (uniform)
     "gain_db": [0.0, 0.0],           # random level change of the pair (uniform)
+    "speed_factors": [],             # e.g. [0.9, 0.95, 1.05, 1.1]: playback speeds of the speech
+    "speed_prob": 0.0,               # share of remixed items whose speech gets one of them
 }
 
 DEFAULTS = {
@@ -84,6 +86,9 @@ def validate(cfg: dict) -> dict:
         raise ValueError(f"discriminator must be '' or one of {sorted(DISCRIMINATORS)} and "
                          "needs the loss 'mpsenet'")
     d = cfg["data"]
+    if not 0 <= d["speed_prob"] <= 1 or any(not 0.5 <= f <= 2 for f in d["speed_factors"]) \
+            or (d["speed_prob"] > 0 and not (d["speed_factors"] and d["remix_prob"] > 0)):
+        raise ValueError("data: speed_prob needs speed_factors within [0.5, 2] and remix_prob > 0")
     if d["segment_seconds"] < 0 or not 0 <= d["remix_prob"] <= 1 or \
             d["remix_snr_db"][0] > d["remix_snr_db"][1] or d["gain_db"][0] > d["gain_db"][1]:
         raise ValueError("data: segment_seconds >= 0, 0 <= remix_prob <= 1, ranges are [low, high]")

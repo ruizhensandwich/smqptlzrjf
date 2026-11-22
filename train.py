@@ -140,7 +140,8 @@ def main(argv=None) -> int:
     train_items = train_set
     if d["segment_seconds"] > 0 or d["remix_prob"] > 0 or tuple(d["gain_db"]) != (0, 0):
         train_items = RemixedSpeech(train_set, int(round(d["segment_seconds"] * SAMPLE_RATE)),
-                                    d["remix_prob"], d["remix_snr_db"], d["gain_db"])
+                                    d["remix_prob"], d["remix_snr_db"], d["gain_db"],
+                                    d["speed_factors"], d["speed_prob"])
         if d["remix_prob"] > 0:
             print(f"remixing: {len(train_items.material)} of {len(train_set)} train pairs usable "
                   f"as noise material ({len(train_items.excluded)} excluded)", flush=True)

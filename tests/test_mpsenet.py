@@ -177,3 +177,19 @@ def test_segments_are_aligned_and_reproducible_without_remixing():
     a, b = mixed[3]
     assert a.shape == (1000,) and not torch.equal(a, b)
 
+
+
+def test_speed_changed_speech_is_new_but_the_pair_stays_consistent():
+    base = _Base()
+    ds = RemixedSpeech(base, segment_samples=1000, remix_prob=1.0, snr_db=(5.0, 5.0),
+                       speed_factors=[0.9, 1.1], speed_prob=1.0)
+    torch.manual_seed(0)
+    noisy, clean = ds[3]
+    w = base.waveforms[3, 1]
+    assert noisy.shape == clean.shape == (1000,) and torch.isfinite(noisy).all()
+    assert not any(torch.allclose(clean, w[a:a + 1000], atol=1e-4) for a in range(3001))
+    assert float((noisy - clean).abs().max()) > 0          # noise was added to the changed speech
+    whole = RemixedSpeech(base, remix_prob=1.0, speed_factors=[1.1], speed_prob=1.0)
+    assert whole[2][0].shape == (4000,)                    # faster = shorter, padded back
+    with pytest.raises(ValueError):
+        complete({"data": {"speed_prob": 0.5}})            # needs factors and remixing

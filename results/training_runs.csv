@@ -1,2 +1,3 @@
 run_id,tag,model,loss,params,seed,epochs,best_epoch,best_val_pesq,stop_reason,elapsed_min,device,torch,config,note
 20261121-175901_baseline_repro,baseline_repro,mask_cnn,log_mag_l1,111361,42,109,89,1.6922,early_stopping,9.8,cpu,2.15.0+cpu,configs/mask_cnn_baseline.json,"reproduce course notebook example on CPU (torch 2.15.0+cpu, seed 42)"
+20261122-004414_mpsenet_remix50,mpsenet_remix50,mpsenet,mpsenet,2263372,1234,116,115,3.1323,max_epochs,657.6,cuda,2.14.1+cu130,configs/mpsenet.json,"MP-SENet from scratch, source settings, remix 0.5, L4 | stopped by hand after epoch 116: validation PESQ flat for 2 h while train PESQ kept rising"

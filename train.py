@@ -160,7 +160,8 @@ def main(argv=None) -> int:
         best_epoch, stale, start = state["best_epoch"], state["stale"], state["epoch"] + 1
         elapsed_before = state["elapsed"]
         with open(run_dir / "history.csv", encoding="utf-8") as f:
-            history = [{k: float(v) for k, v in r.items()} for r in csv.DictReader(f)]
+            history = [{k: int(float(v)) if k in ("epoch", "best_epoch", "stale_epochs")
+                        else float(v) for k, v in r.items()} for r in csv.DictReader(f)]
         history = [h for h in history if h["epoch"] < start]
         print(f"resuming {run_id} at epoch {start}")
 
@@ -252,12 +253,12 @@ def main(argv=None) -> int:
     print(f"done ({stop_reason}, {epoch} epochs): best validation PESQ {best_pesq:.4f} at epoch "
           f"{best_epoch} -> {best_rel}", flush=True)
     if args.no_eval:
-        print(f"next: python evaluate.py --weights {best_rel} --split all --tag {args.tag or run_id}")
+        print(f"next: python evaluate.py --weights {best_rel} --split all --tag {args.tag or run_id.split("_", 1)[-1]}")
         return 0
     # score the chosen weights as submitted (16-bit, train + validation) and show the model board
     import evaluate
     return evaluate.main(["--weights", best_rel, "--split", "all", "--device", args.device,
-                          "--tag", args.tag or run_id, "--note", cfg.get("note", ""),
+                          "--tag", args.tag or run_id.split("_", 1)[-1], "--note", cfg.get("note", ""),
                           "--workers", str(args.workers)])
 
 

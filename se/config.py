@@ -7,6 +7,8 @@ example), unknown keys are an error so that a typo never goes unnoticed.
     {"model": "mask_cnn",
      "model_args": {"n_fft": 512, "hop": 128, "hidden_channels": [64, 64], "kernel_sizes": [5, 3, 1]},
      "loss": "log_mag_l1",
+     "discriminator": "",
+     "data": {"segment_seconds": 0, "remix_prob": 0, ...},
      "train": {"seed": 42, "batch_size": 16, "lr": 0.001, ...}}
 
 `--set train.lr=0.0005` style overrides go through apply_overrides.
@@ -32,12 +34,26 @@ TRAIN_DEFAULTS = {
     "min_lr": 1e-5,
     "save_epochs": [10, 20, 40, 80],   # extra checkpoints kept for listening comparisons
     "num_workers": 0,
+    "optimizer": "adam",      # adam | adamw
+    "scheduler": "plateau",   # plateau (lr_factor, lr_patience, min_lr) | exponential (lr_gamma)
+    "lr_gamma": 0.99,         # exponential: lr *= lr_gamma after every epoch
+    "val_batch_size": 0,      # 0 = batch_size
+}
+
+# Training data. The defaults are the course example: every pair whole, as recorded.
+DATA_DEFAULTS = {
+    "segment_seconds": 0.0,          # > 0: a random segment of this length per item
+    "remix_prob": 0.0,               # share of items whose noise comes from another train pair
+    "remix_snr_db": [-5.0, 20.0],    # SNR range of remixed items (uniform)
+    "gain_db": [0.0, 0.0],           # random level change of the pair (uniform)
 }
 
 DEFAULTS = {
     "model": "mask_cnn",
     "model_args": {},
     "loss": "log_mag_l1",
+    "discriminator": "",      # "" | "metric" (PESQ-predicting discriminator, se/trainers.py)
+    "data": DATA_DEFAULTS,
     "train": TRAIN_DEFAULTS,
     "note": "",
 }
@@ -62,7 +78,20 @@ def validate(cfg: dict) -> dict:
         raise ValueError(f"unknown model {cfg['model']!r}; registered: {sorted(MODELS)}")
     if cfg["loss"] not in LOSSES:
         raise ValueError(f"unknown loss {cfg['loss']!r}; registered: {sorted(LOSSES)}")
+    from se.arch.metric_discriminator import DISCRIMINATORS
+    if cfg["discriminator"] and (cfg["discriminator"] not in DISCRIMINATORS
+                                 or cfg["loss"] != "mpsenet"):
+        raise ValueError(f"discriminator must be '' or one of {sorted(DISCRIMINATORS)} and "
+                         "needs the loss 'mpsenet'")
+    d = cfg["data"]
+    if d["segment_seconds"] < 0 or not 0 <= d["remix_prob"] <= 1 or \
+            d["remix_snr_db"][0] > d["remix_snr_db"][1] or d["gain_db"][0] > d["gain_db"][1]:
+        raise ValueError("data: segment_seconds >= 0, 0 <= remix_prob <= 1, ranges are [low, high]")
     t = cfg["train"]
+    if t["optimizer"] not in ("adam", "adamw") or t["scheduler"] not in ("plateau", "exponential") \
+            or not 0 < t["lr_gamma"] <= 1 or t["val_batch_size"] < 0:
+        raise ValueError("train: optimizer adam|adamw, scheduler plateau|exponential, "
+                         "0 < lr_gamma <= 1, val_batch_size >= 0")
     if t["batch_size"] <= 0 or not 0 < t["min_lr"] <= t["lr"]:
         raise ValueError("batch_size > 0 and 0 < min_lr <= lr are required")
     if not 1 <= t["min_epochs"] <= t["max_epochs"] or t["patience"] <= 0:
@@ -81,6 +110,11 @@ def load_config(path: str | Path | None = None, overrides: list[str] | None = No
     return validate(cfg)
 
 
+def complete(cfg: dict) -> dict:
+    """A stored config (run folder, checkpoint) with settings added since it was written."""
+    return validate(_merge(DEFAULTS, cfg))
+
+
 def apply_overrides(cfg: dict, overrides: list[str]) -> dict:
     """['train.lr=5e-4', 'model_args.hidden_channels=[128,128]'] -> cfg (values are JSON)."""
     cfg = copy.deepcopy(cfg)
@@ -96,7 +130,8 @@ def apply_overrides(cfg: dict, overrides: list[str]) -> dict:
         node = cfg
         for p in parents:
             node = node[p]
-        if parents and parents[0] == "train" and last not in TRAIN_DEFAULTS:
-            raise KeyError(f"unknown train setting {last!r}")
+        known = {"train": TRAIN_DEFAULTS, "data": DATA_DEFAULTS}.get(parents[0] if parents else "")
+        if known is not None and last not in known:
+            raise KeyError(f"unknown {parents[0]} setting {last!r}")
         node[last] = value
     return cfg

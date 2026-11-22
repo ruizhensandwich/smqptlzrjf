@@ -1,1 +1,23 @@
-[]
+[
+  {
+    "id": "mpsenet2023",
+    "authors": "Y.-X. Lu, Y. Ai, Z.-H. Ling",
+    "title": "MP-SENet: A Speech Enhancement Model with Parallel Denoising of Magnitude and Phase Spectra",
+    "venue": "Proc. Interspeech",
+    "year": 2023,
+    "doi": "10.21437/Interspeech.2023-1441",
+    "used_for": "모델 구조(압축 크기 스펙트럼 마스크와 위상을 나란히 추정하는 인코더-트랜스포머-디코더)와 손실(크기·위상 anti-wrapping·복소·일관성·시간·metric 판별기)의 근거. se/arch/mpsenet.py, se/losses.py, se/trainers.py",
+    "checked_by": "",
+    "doi_verified": "2026-11-22"
+  },
+  {
+    "id": "mpsenet_code",
+    "authors": "Y.-X. Lu",
+    "title": "MP-SENet (source code)",
+    "venue": "GitHub repository yxlu-0102/MP-SENet, MIT License",
+    "year": 2023,
+    "url": "https://github.com/yxlu-0102/MP-SENet",
+    "used_for": "models/model.py·transformer.py·discriminator.py·train.py·dataset.py·config.json을 읽고 이 저장소의 하네스에 맞게 이식(가중치는 받지 않고 처음부터 학습). 바꾼 점은 se/arch/mpsenet.py 첫머리에 기록",
+    "checked_by": ""
+  }
+]

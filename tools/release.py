@@ -66,7 +66,10 @@ def weights_info() -> dict:
     from se.checkpoint import read_checkpoint
     ck = read_checkpoint(WEIGHTS)
     m = ck["meta"]
-    t = (m.get("config") or {}).get("train", {})
+    cfg = m.get("config") or {}
+    t = {**cfg.get("train", {}), **{f"data.{k}": v for k, v in cfg.get("data", {}).items()}}
+    if cfg.get("discriminator"):
+        t["discriminator"] = cfg["discriminator"]
     return {"model": ck["model"], "model_args": ck["model_args"],
             "parameters": m.get("parameters"), "loss": m.get("loss"),
             "seed": m.get("seed"), "epochs_completed": m.get("epochs_completed"),
@@ -78,7 +81,11 @@ def weights_info() -> dict:
             "train_settings": {k: t.get(k) for k in ("batch_size", "lr", "adam_betas",
                                                      "weight_decay", "max_epochs", "min_epochs",
                                                      "patience", "min_delta", "lr_factor",
-                                                     "lr_patience", "min_lr") if k in t},
+                                                     "lr_patience", "min_lr", "optimizer",
+                                                     "scheduler", "lr_gamma", "discriminator",
+                                                     "data.segment_seconds", "data.remix_prob",
+                                                     "data.remix_snr_db", "data.gain_db")
+                               if k in t},
             "weights_mb": round(WEIGHTS.stat().st_size / 2 ** 20, 2)}
 
 

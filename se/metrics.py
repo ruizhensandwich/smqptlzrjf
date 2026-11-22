@@ -37,6 +37,11 @@ def pesq_score(clean: np.ndarray, estimate: np.ndarray, sr: int = SAMPLE_RATE):
         return float("nan"), f"{type(e).__name__}: {e}"
 
 
+def pesq_pair(args) -> float:
+    """(clean, estimate) -> PESQ-WB or NaN; top-level so process pools can pickle it."""
+    return pesq_score(*args)[0]
+
+
 def score_pair(args):
     """(clean, estimate) -> (pesq, snr, error); top-level so process pools can pickle it."""
     clean, estimate = args

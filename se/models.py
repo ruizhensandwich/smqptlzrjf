@@ -4,12 +4,15 @@ Every model maps a noisy waveform batch [B, T] to an enhanced one with
 `enhance(noisy) -> [B, T]` (same length). Spectral-mask models also expose
 `spectrum(wave)` and `forward(noisy) -> estimated complex spectrum`, which the
 spectral losses use. Register a new model in MODELS; its constructor keyword
-arguments are the config's "model_args".
+arguments are the config's "model_args". Models taken from open-source projects live
+in se/arch/, one file per model, with their source and license at the top.
 """
 from __future__ import annotations
 
 import torch
 from torch import nn
+
+from se.arch.mpsenet import MPSENet
 
 
 class MaskCNN(nn.Module):
@@ -58,6 +61,7 @@ class MaskCNN(nn.Module):
 
 MODELS: dict[str, type[nn.Module]] = {
     "mask_cnn": MaskCNN,
+    "mpsenet": MPSENet,          # se/arch/mpsenet.py (MP-SENet, MIT License)
 }
 
 

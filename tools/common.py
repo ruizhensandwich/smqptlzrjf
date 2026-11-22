@@ -23,7 +23,7 @@ WEIGHTS = ROOT / "weights" / "submission.pt"
 
 # Files that decide what denoise.py outputs. If any changes, results saved for
 # a submission no longer describe the code.
-FINGERPRINT_GLOBS = ["denoise.py", "se/*.py", "weights/submission.pt", "requirements.txt"]
+FINGERPRINT_GLOBS = ["denoise.py", "se/*.py", "se/arch/*.py", "weights/submission.pt", "requirements.txt"]
 
 
 def tag_name(round_no: int) -> str:

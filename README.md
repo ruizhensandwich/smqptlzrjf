@@ -46,13 +46,25 @@ pip install -r requirements-dev.txt        # Windows는 pesq를 conda-forge로: 
 python train.py --config configs/mask_cnn_baseline.json --tag baseline
 python evaluate.py --weights runs/<run_id>/best.pt --split all --tag baseline
 python tools/promote.py runs/<run_id>      # 그 가중치를 weights/submission.pt로
+
+python train.py --config configs/mpsenet.json --tag mpsenet     # MP-SENet (GPU 권장)
+python train.py --resume runs/<run_id>                          # 중단된 학습 이어서
 ```
 
-- `train.py`: 매 epoch 학습 1,296쌍 → 검증 164개 전체의 손실과 평균 PESQ-WB. **검증 PESQ가 가장 높은 epoch의 가중치**를 고릅니다. 검증 PESQ가 정체되면 학습률을 낮추고, 일정 기간 개선이 없으면 조기 종료합니다. 기록은 `runs/<run_id>/`와 `results/training_runs.csv`에 남습니다.
+- `train.py`: 매 epoch 학습 1,296쌍 → 검증 164개 전체의 손실과 평균 PESQ-WB. **검증 PESQ가 가장 높은 epoch의 가중치**를 고르고, 일정 기간 개선이 없으면 조기 종료합니다. 기록은 `runs/<run_id>/`와 `results/training_runs.csv`에 남습니다. 모델, 손실, 옵티마이저, 학습률 일정, 판별기 사용 여부, 데이터 옵션은 모두 `configs/*.json` 한 파일에 적습니다.
+- **동적 재혼합**(`data.remix_prob`): 학습 쌍의 잡음(`noisy − clean`)을 다른 학습 발화에 무작위 SNR로 다시 섞어, 같은 데이터에서 화자·잡음·SNR 조합을 늘립니다. 학습 데이터만 쓰고, 메모리에서만 섞으며 파일로 저장하지 않습니다. `tools/check_mixing.py`가 `noisy − clean`이 실제로 깨끗한 잡음인지(위치 어긋남, 음량 차, SNR 일치, 무음) 파일마다 확인하고, 기준을 벗어난 파일은 재료에서 뺍니다. 결과는 [`results/mixing_check/`](results/mixing_check/)에 있습니다.
 - `evaluate.py`: `denoise.py`와 같은 코드로 만든 16비트 출력을 clean과 비교해 PESQ-WB와 SNR을 잽니다. 결과는 `results/experiments.csv`에 기록합니다.
 - `tools/spectrogram.py`: 같은 파일에 대해 Noisy·Clean·각 모델 출력의 스펙트로그램(같은 축·색 범위)과 PESQ/SNR, 같은 재생 게인의 WAV를 `results/listening/<시각>/index.html` 한 페이지로 만듭니다. 결과에는 수강생 녹음이 들어 있어 저장소에 올리지 않습니다.
 - `tools/model_board.py`: 지금까지 평가한 모든 모델의 비교표(PESQ 기록, SNR·조건별 점수, 일반화 차, 학습·추론 비용, 장점·단점)를 [`results/model_board.md`](results/model_board.md)에 씁니다. `train.py`·`evaluate.py` 출력 끝에도 표시됩니다.
 - 리눅스 GPU 서버(GCP, RunPod): `bash setup.sh` 한 번이면 학습 환경이 준비됩니다.
+
+## 사용한 공개 코드
+
+| 이 저장소의 파일 | 출처 | 라이선스 | 사용 방식 |
+|---|---|---|---|
+| `se/arch/mpsenet.py`, `se/arch/metric_discriminator.py`, `se/losses.py`의 `mpsenet`, `se/trainers.py`의 `MetricGANTrainer` | [yxlu-0102/MP-SENet](https://github.com/yxlu-0102/MP-SENet) (Lu, Ai, Ling, Interspeech 2023) | MIT | 모델·판별기·손실·학습 순서를 이식. 공개된 학습 가중치는 쓰지 않고 이 과제의 train 데이터로 처음부터 학습. 바꾼 점은 각 파일 첫머리에 기록 |
+
+참고 문헌 목록은 [`docs/references.json`](docs/references.json)에 있습니다.
 
 ## 폴더 구조
 
@@ -60,7 +72,8 @@ python tools/promote.py runs/<run_id>      # 그 가중치를 weights/submission
 |---|---|
 | `denoise.py` | 제출용 추론: `input/` → `output/` |
 | `weights/submission.pt` | 제출 가중치 (모델 설정 포함) |
-| `se/` | 모델(`models.py`), 손실(`losses.py`), 데이터(`data.py`), 추론(`inference.py`), 채점(`metrics.py`) |
+| `se/` | 모델 등록(`models.py`), 손실(`losses.py`), 학습 단계(`trainers.py`), 데이터(`data.py`), 추론(`inference.py`), 채점(`metrics.py`) |
+| `se/arch/` | 공개 코드에서 이식한 모델 (파일 하나에 모델 하나, 첫머리에 출처와 라이선스) |
 | `train.py`, `evaluate.py`, `compare.py` | 학습, 채점, 두 실험 비교 |
 | `configs/` | 실험 설정 (모델 구조, 학습 하이퍼파라미터) |
 | `results/` | 실험 기록(`experiments.csv`, `training_runs.csv`), 모델 비교표(`model_board.md`), 회차별 제출 결과(`submissions/roundN/`) |

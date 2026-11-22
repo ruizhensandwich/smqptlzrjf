@@ -130,6 +130,10 @@ def main(argv=None) -> int:
     device = pick_device(args.device)
     if device.type == "cpu":
         torch.set_num_threads(min(4, torch.get_num_threads()))
+    else:   # faster convolutions and matrix products on the GPU (TF32, tuned cuDNN kernels)
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.allow_tf32 = True
+        torch.backends.cuda.matmul.allow_tf32 = True
 
     train_set, val_set = PairedSpeech("train"), PairedSpeech("validation")
     d = cfg["data"]

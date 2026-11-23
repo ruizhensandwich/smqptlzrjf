@@ -14,7 +14,7 @@ validation 164쌍·화자 5명, 3초, 잡음 범주 23개, SNR 0/5/10/15 dB).
 - **공개 금지:** `data/`(수강생 녹음), 모든 음성 파일, `docs/ai_usage/`(내역서), 인증 정보(서비스 계정 키, SSH 키, 토큰, `.env`). `.gitignore` + `tools/secret_scan.py`(pre-push 훅, `git config core.hooksPath .githooks`)로 막는다.
 - **외부 공개 데이터(음성·잡음)를 학습에 쓸 수 있다** (조교 답변, 사용자 전달 2026-11-23). 학습에만 쓰고, 출처·라이선스를 README에 적고, 저장소에는 올리지 않는다.
 - **공개 pretrained 가중치는 조교 확인 전까지 제출에 쓰지 않는다.** 조교 답변은 "외부 데이터 허용"뿐이고 pretrained는 묻지 않았다(2026-11-23 사용자 확인). `weights/pretrained/`와 `weights/candidates/mpsenet_dns_ft.pt`는 실험 기록으로만 두고, 허용 답변을 받기 전에는 `weights/submission.pt`로 올리지 않는다. 허용되면 출처·라이선스·학습 데이터를 README와 내역서에 적는다.
-- **validation은 새 화자만 잰다.** validation의 잡음 원본(NOISEX-92 14개, Nonspeech 47개)은 전부 train에도 있다(2026-11-23 확인). 새 잡음에 대한 일반화는 validation PESQ로 알 수 없으므로 따로 잰다.
+- **validation은 새 화자만 잰다.** validation의 잡음 원본(NOISEX-92 14개, Nonspeech 47개)은 전부 train에도 있다(2026-11-23 확인). 새 잡음에 대한 일반화는 **새 잡음 검증셋**(`data/newnoise/`: validation clean 164개 + 같은 SNR + ESC-50 fold 5 잡음, `tools/make_newnoise.py`)으로 따로 잰다. **ESC-50 fold 5는 학습에 절대 쓰지 않는다**(외부 잡음으로 학습할 때는 fold 1~4나 다른 출처).
 - **가중치 선택은 validation PESQ 최고 epoch** (공지 권장). 대신 train 점수도 함께 기록하고, validation에만 맞춘 설정 선택이 반복되지 않게 본다(히든 테스트는 새 화자·잡음).
 - **AI 참고 문헌은 실재·내용을 직접 확인한 것만.** `docs/references.json`의 `checked_by`는 사람이 채운다.
 - push: 일반 커밋과 제출 태그는 Claude가 push한다(사용자 요청). 런어스 비밀글 제출은 팀장이 직접.
@@ -31,6 +31,7 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
 | 이어서 학습 | `python train.py --resume runs/<run_id>` |
 | 재혼합 재료 확인 (noisy − clean이 깨끗한 잡음인지) | `python tools/check_mixing.py` → `results/mixing_check/` |
 | 채점 (16비트 출력 기준) | `python evaluate.py --weights runs/<id>/best.pt --split all --tag T` |
+| 새 잡음 검증셋 만들기 / 채점 | `python tools/make_newnoise.py [--fetch]` → `data/newnoise/` / `python evaluate.py --weights W --split newnoise --tag T` (`--split all`은 있으면 함께 채점) |
 | 모델 비교표 (모든 모델의 PESQ·장단점) | `python tools/model_board.py` → `results/model_board.md` |
 | 스펙트로그램·청취 비교 | `python tools/spectrogram.py --models runs/<A> runs/<B> [--pick diverse\|worst\|best --n 4]` / `<segment_id> ...` / `--noisy any.wav [--clean ref.wav]` → `results/listening/<time>/index.html` (학생 녹음 포함: git 제외·공개 금지) |
 | 두 실행 비교 | `python compare.py <runA> <runB> [--split train]` |
@@ -87,6 +88,10 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
   29 epoch 선택): **validation 3.318 / SNR 19.82 dB, train 3.457** (일반화 차 +0.063). 현재 최고.
   가중치는 `weights/candidates/mpsenet_dns_ft.pt`. 공개 가중치 대비 validation +0.14, train +0.48: 오른 폭의 대부분이
   train의 화자·잡음에 맞춘 것이라, 새 잡음에서 이득인지는 아직 재지 않았다(새 잡음 검증셋 필요).
+- 새 잡음 검증셋 첫 채점(2026-11-23, 입력 1.519): baseline 1.543(+0.02, 62개가 입력보다 나쁨), mpsenet_remix50 **2.827**,
+  mpsenet_speed 2.888, DNS 공개 가중치 그대로 **3.336**, DNS 이어 학습 3.332. 과제 데이터만으로 학습한 모델은 새 잡음에서
+  DNS 계열보다 0.5 낮다(validation에서는 0.04~0.19 차). 이어 학습은 새 잡음에서 이득 0(순간 잡음 −0.25, 0 dB 2.75 → 2.42):
+  validation +0.14는 아는 잡음에 맞춘 몫이었다. DNS 계열 점수는 ESC-50과 DNS 잡음이 둘 다 Freesound 출처라 조금 유리할 수 있다.
 - 학습 곡선의 모양: 60 epoch쯤 3.0, 80 epoch 이후 시간당 +0.03 이하, 막바지에 train만 오르고 validation이 멈춤.
   중단 조건은 `min_delta 0.01`, `patience 25`, `min_epochs 40`, `max_epochs 150`(사용자와 합의), 끝나면 VM 정지.
 

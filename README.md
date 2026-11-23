@@ -54,6 +54,7 @@ python train.py --resume runs/<run_id>                          # 중단된 학�
 - `train.py`: 매 epoch 학습 1,296쌍 → 검증 164개 전체의 손실과 평균 PESQ-WB. **검증 PESQ가 가장 높은 epoch의 가중치**를 고르고, 일정 기간 개선이 없으면 조기 종료합니다. 기록은 `runs/<run_id>/`와 `results/training_runs.csv`에 남습니다. 모델, 손실, 옵티마이저, 학습률 일정, 판별기 사용 여부, 데이터 옵션은 모두 `configs/*.json` 한 파일에 적습니다.
 - **동적 재혼합**(`data.remix_prob`): 학습 쌍의 잡음(`noisy − clean`)을 다른 학습 발화에 무작위 SNR로 다시 섞어, 같은 데이터에서 화자·잡음·SNR 조합을 늘립니다. 학습 데이터만 쓰고, 메모리에서만 섞으며 파일로 저장하지 않습니다. `tools/check_mixing.py`가 `noisy − clean`이 실제로 깨끗한 잡음인지(위치 어긋남, 음량 차, SNR 일치, 무음) 파일마다 확인하고, 기준을 벗어난 파일은 재료에서 뺍니다. 결과는 [`results/mixing_check/`](results/mixing_check/)에 있습니다.
 - `evaluate.py`: `denoise.py`와 같은 코드로 만든 16비트 출력을 clean과 비교해 PESQ-WB와 SNR을 잽니다. 결과는 `results/experiments.csv`에 기록합니다.
+- **새 잡음 검증셋**(`tools/make_newnoise.py --fetch` → `evaluate.py --split newnoise`): 배포 validation의 잡음 녹음은 모두 train에도 들어 있어(화자만 새로움), validation PESQ로는 처음 듣는 잡음에서의 성능을 알 수 없습니다. 그래서 validation의 clean 164개와 SNR은 그대로 두고 잡음만 과제 데이터에 없는 것(ESC-50 fold 5)으로 바꾼 검증셋을 따로 채점합니다. 비교표의 "새 잡음 PESQ" 열입니다.
 - `tools/spectrogram.py`: 같은 파일에 대해 Noisy·Clean·각 모델 출력의 스펙트로그램(같은 축·색 범위)과 PESQ/SNR, 같은 재생 게인의 WAV를 `results/listening/<시각>/index.html` 한 페이지로 만듭니다. 결과에는 수강생 녹음이 들어 있어 저장소에 올리지 않습니다.
 - `tools/model_board.py`: 지금까지 평가한 모든 모델의 비교표(PESQ 기록, SNR·조건별 점수, 일반화 차, 학습·추론 비용, 장점·단점)를 [`results/model_board.md`](results/model_board.md)에 씁니다. `train.py`·`evaluate.py` 출력 끝에도 표시됩니다.
 - 리눅스 GPU 서버(GCP, RunPod): `bash setup.sh` 한 번이면 학습 환경이 준비됩니다.
@@ -64,6 +65,12 @@ python train.py --resume runs/<run_id>                          # 중단된 학�
 |---|---|---|---|
 | `se/arch/mpsenet.py`, `se/arch/metric_discriminator.py`, `se/losses.py`의 `mpsenet`, `se/trainers.py`의 `MetricGANTrainer` | [yxlu-0102/MP-SENet](https://github.com/yxlu-0102/MP-SENet) (Lu, Ai, Ling, Interspeech 2023) | MIT | 모델·판별기·손실·학습 순서를 이식. 공개된 학습 가중치는 쓰지 않고 이 과제의 train 데이터로 처음부터 학습. 바꾼 점은 각 파일 첫머리에 기록 |
 | `weights/pretrained/mpsenet_dns.pt` | 같은 저장소의 `best_ckpt/g_best_dns` (저자 공개 가중치, DNS Challenge 데이터로 학습) | MIT (`weights/pretrained/LICENSE.MP-SENet`) | 가중치 값은 그대로 두고 이 저장소의 파일 형식으로만 변환(`tools/promote.py --state-dict`). 이어 학습의 출발점(`configs/mpsenet_pretrained_dns.json`의 `init_weights`)으로 쓴다. 이 가중치는 원본 코드의 축 순서로 학습됐으므로 모델 설정 `source_axes: true`가 필요하다 |
+
+외부 데이터 (저장소에 올리지 않음, 받는 방법은 각 도구의 `--fetch`)
+
+| 데이터 | 출처 | 라이선스 | 사용 방식 |
+|---|---|---|---|
+| ESC-50 fold 5 (환경음 400개, 50종) | [karolpiczak/ESC-50](https://github.com/karolpiczak/ESC-50) (Piczak, ACM MM 2015) | CC BY-NC 3.0 | **채점에만** 사용. `tools/make_newnoise.py`가 validation 말소리 164개에 같은 SNR로 섞어 "새 잡음" 검증셋(`data/newnoise/`)을 만든다. 학습에는 쓰지 않는다 |
 
 참고 문헌 목록은 [`docs/references.json`](docs/references.json)에 있습니다.
 

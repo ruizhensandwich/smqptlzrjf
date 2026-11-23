@@ -153,7 +153,7 @@ def main(argv=None) -> int:
                             shuffle=False)
     model = build_model(cfg["model"], cfg["model_args"]).to(device)
     if cfg["init_weights"] and state is None:
-        init = read_checkpoint(ROOT / cfg["init_weights"])
+        init = read_checkpoint(HERE / cfg["init_weights"])
         if (init["model"], init["model_args"]) != (cfg["model"], cfg["model_args"]):
             sys.exit(f"init_weights {cfg['init_weights']} is {init['model']} {init['model_args']}, "
                      "not this config's model")

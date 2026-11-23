@@ -11,6 +11,9 @@ input/*
 output/*
 !output/.gitkeep
 
+# Session handoff notes: local only (team members' names, working details)
+/HANDOFF.md
+
 # AI usage reports are submitted privately (Learn Us secret post), never published here
 docs/ai_usage/
 

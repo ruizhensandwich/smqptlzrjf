@@ -3,7 +3,7 @@
 PyTorch 딥러닝 모델로 16 kHz 모노 음성의 잡음을 줄인다. 순위 = 히든 테스트셋 파일별 **PESQ-WB 평균**
 (재제출 시 검증 완료된 제출 중 최고 점수). 데이터·분할은 1차와 같다 (train 1,296쌍·화자 35명,
 validation 164쌍·화자 5명, 3초, 잡음 범주 23개, SNR 0/5/10/15 dB).
-저장소: https://github.com/ruizhensandwich/smqptlzrjf (public, 조교가 clone해서 실행). 배포 노트북:
+저장소: https://github.com/ruizhensandwich/smqptlzrjf (조교가 clone해서 실행. 지금은 비공개이고 제출 직전에 공개로 전환한다). 배포 노트북:
 `~/Downloads/deep_learning_noise_reduction_challenge/` (MaskCNN 예제, 배포 가중치 validation 1.692).
 
 ## 절대 규칙
@@ -70,3 +70,18 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
 - 이 저장소의 `train.py`로 CPU 재현(2026-11-21, `runs/20261121-175901_baseline_repro`, 9.8분): 109 epoch 모두 손실·PESQ 차이 0, 선택 가중치가 배포 가중치와 비트 단위로 같음. 현재 `weights/submission.pt`.
   16비트 출력 채점: **validation 1.6922 / SNR 13.06 dB, train 1.8776 / 13.11 dB** (입력 1.395 / 1.470). train 개선 +0.41 대 validation +0.30.
   약점(스펙트로그램): 저역 잡음(바람·차량 실내)을 지울 때 300 Hz 아래 말소리 배음까지 지운다 — validation에서 가장 손해 본 3개 파일(traffic 15 dB −0.61, wind 15 dB −0.56, volvo 5 dB −0.45)이 모두 이 경우.
+- MP-SENet(`se/arch/mpsenet.py`, 2.26M, 크기는 마스킹·위상은 매핑)을 처음부터 학습(2026-11-22, GCP L4 11시간,
+  `configs/mpsenet.json` + 재혼합 50 %, 116 epoch 중 115 epoch 선택): **validation 3.132 / SNR 18.40 dB,
+  train 3.303** (일반화 차 +0.094). validation 164개 전부 베이스라인보다 좋고 입력보다 나빠진 파일 0개.
+  약점: 넓은 대역의 정상 잡음(hf_channel 2.35, broadband 2.45)과 0 dB(2.37).
+  가중치는 `weights/candidates/mpsenet_remix50.pt`에 보관. **`weights/submission.pt`는 아직 베이스라인**(1회차 미제출).
+- 같은 설정에 말소리 속도 변환(0.9~1.1배)만 추가(`configs/mpsenet_speed.json`): validation 3.113 / train 3.284,
+  일반화 차 +0.095. epoch 간 흔들림(±0.02) 안이라 **효과 없음**.
+- 학습 곡선의 모양: 60 epoch쯤 3.0, 80 epoch 이후 시간당 +0.03 이하, 막바지에 train만 오르고 validation이 멈춤.
+  중단 조건은 `min_delta 0.01`, `patience 25`, `min_epochs 40`, `max_epochs 150`(사용자와 합의), 끝나면 VM 정지.
+
+## 작업 방식 (사용자 요청, 2026-11-22)
+- 실험은 한 번에 하나만 바꾼다.
+- 로컬 CPU에서는 pytest와 파일 몇 개짜리 확인만. 학습과 전체 채점은 GPU VM에서. CPU 추론 속도는 모델 선택 기준이 아니다.
+- 일반화가 최우선이다(히든 테스트는 새 화자·잡음). validation 0.0x 차이보다 과적합 여부를 본다.
+- GPU VM은 Python 3.10이다. 학습을 시작하기 전에 VM에서 pytest와 `py_compile`을 돌린다.

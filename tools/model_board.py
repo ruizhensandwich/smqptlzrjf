@@ -36,7 +36,9 @@ COLUMNS = ["date", "run_id", "tag", "model", "params", "weights_mb", "weights_sh
            "val_pesq_0db", "val_pesq_5db", "val_pesq_10db", "val_pesq_15db", "val_d_0db",
            "val_pesq_hard", "val_worse_pct", "train_pesq", "train_d_pesq", "gen_gap",
            "best_category", "best_category_d", "worst_category", "worst_category_d",
-           "category_split", "rtf", "infer_device", "note"]
+           "category_split", "rtf", "infer_device", "note",
+           "new_pesq", "new_d_pesq", "new_worse_pct"]
+NEW_COLUMNS = ("new_pesq", "new_d_pesq", "new_worse_pct")   # split "newnoise": unseen noise
 
 
 # --------------------------------------------------------------------------
@@ -90,7 +92,14 @@ def make_row(per_split: dict[str, list[dict]], method: str, info: dict) -> dict:
     for k in ("best_category", "best_category_d", "worst_category", "worst_category_d"):
         row[k] = cat_src.get(k, "")
     row["category_split"] = "train" if "train" in per_split else "validation"
+    if "newnoise" in per_split:
+        row.update(newnoise_values(per_split["newnoise"], method))
     return row
+
+
+def newnoise_values(per_file: list[dict], method: str) -> dict:
+    m = split_metrics(per_file, method)
+    return {"new_pesq": m["pesq"], "new_d_pesq": m["d_pesq"], "new_worse_pct": m["worse_pct"]}
 
 
 def run_facts(ckpt: dict, weights: Path) -> dict:
@@ -121,13 +130,33 @@ def load_rows() -> list[dict]:
 
 
 def save_row(row: dict) -> None:
+    old = [r for r in load_rows() if r.get("weights_sha") == str(row["weights_sha"])]
     rows = [r for r in load_rows() if r.get("weights_sha") != str(row["weights_sha"])]
-    rows.append({k: _fmt(row.get(k, "")) for k in COLUMNS})
+    new = {k: _fmt(row.get(k, "")) for k in COLUMNS}
+    for k in NEW_COLUMNS:               # a validation-only re-score keeps the newnoise scores
+        if new[k] == "" and old:
+            new[k] = old[-1].get(k) or ""
+    rows.append(new)
+    _write(rows)
+
+
+def set_newnoise(weights_sha: str, per_file: list[dict], method: str) -> bool:
+    """Put the newnoise scores on the board row of these weights (False: no such row yet)."""
+    rows = load_rows()
+    hit = [r for r in rows if r.get("weights_sha") == str(weights_sha)]
+    for r in hit:
+        r.update({k: _fmt(v) for k, v in newnoise_values(per_file, method).items()})
+    if hit:
+        _write(rows)
+    return bool(hit)
+
+
+def _write(rows: list[dict]) -> None:
     BOARD_CSV.parent.mkdir(parents=True, exist_ok=True)
     with open(BOARD_CSV, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, fieldnames=COLUMNS)
         w.writeheader()
-        w.writerows(rows)
+        w.writerows({k: r.get(k) or "" for k in COLUMNS} for r in rows)
 
 
 def _fmt(x):
@@ -197,7 +226,7 @@ def render(rows: list[dict]) -> str:
     rows = sorted(rows, key=lambda r: r["date"])
     hi = {k: max((_f(r, k) for r in rows if _f(r, k) == _f(r, k)), default=None)
           for k in ("val_pesq", "val_d_pesq", "val_snr", "val_pesq_0db", "val_pesq_15db",
-                    "val_pesq_hard", "train_pesq")}
+                    "val_pesq_hard", "train_pesq", "new_pesq", "new_d_pesq")}
     lo = {k: min((_f(r, k) for r in rows if _f(r, k) == _f(r, k)), default=None)
           for k in ("val_worse_pct", "gen_gap", "rtf")}
 
@@ -210,16 +239,17 @@ def render(rows: list[dict]) -> str:
         return f"**{s}**" if len(rows) > 1 and target is not None and x == target else s
 
     lines = ["### 모델 비교표 (Validation 164개 · 16비트 출력 기준, **굵게** = 가장 좋은 값)", "",
-             "| # | 태그 | 모델 | 파라미터 | Val PESQ | ΔPESQ | Val SNR | 0 dB | 15 dB | hard "
-             "| 나빠진 파일 | Train PESQ | 일반화 차 | 학습 | 추론 속도 | 날짜 |",
-             "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+             "| # | 태그 | 모델 | 파라미터 | Val PESQ | ΔPESQ | 새 잡음 PESQ | 새 잡음 Δ | Val SNR "
+             "| 0 dB | 15 dB | hard | 나빠진 파일 | Train PESQ | 일반화 차 | 학습 | 추론 속도 | 날짜 |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for i, r in enumerate(rows, 1):
         params = f"{int(_f(r, 'params')) / 1000:.0f}k" if _f(r, "params") == _f(r, "params") else "-"
         train = (f"{r['epochs']}ep/{r['best_epoch']} · {r['train_min']}분 · {r['train_device']}"
                  if r.get("epochs") else "-")
         lines.append(" | ".join([
             f"| {i}", r["tag"] or r["run_id"], r["model"], params, cell(r, "val_pesq"),
-            cell(r, "val_d_pesq", "{:+.3f}"), cell(r, "val_snr", "{:.2f}"), cell(r, "val_pesq_0db"),
+            cell(r, "val_d_pesq", "{:+.3f}"), cell(r, "new_pesq"), cell(r, "new_d_pesq", "{:+.3f}"),
+            cell(r, "val_snr", "{:.2f}"), cell(r, "val_pesq_0db"),
             cell(r, "val_pesq_15db"), cell(r, "val_pesq_hard"),
             cell(r, "val_worse_pct", "{:.1f}%", hi_best=False), cell(r, "train_pesq"),
             cell(r, "gen_gap", "{:+.3f}", hi_best=False), train,
@@ -231,7 +261,9 @@ def render(rows: list[dict]) -> str:
         pro, con = verdict[r["weights_sha"]]
         lines.append(f"| {i} | {r['tag'] or r['run_id']} | {'<br>'.join(pro) or '-'} | "
                      f"{'<br>'.join(con) or '-'} | {r.get('note') or '-'} |")
-    lines += ["", "ΔPESQ = 입력(noisy) 대비 개선 · 0 dB/15 dB/hard = 해당 조건의 Val PESQ · "
+    lines += ["", "ΔPESQ = 입력(noisy) 대비 개선 · 새 잡음 = validation 말소리에 과제 데이터에 없는 "
+              "잡음(ESC-50 fold 5)을 같은 SNR로 섞은 164개(`tools/make_newnoise.py`), 학습에 쓰지 않음 · "
+              "0 dB/15 dB/hard = 해당 조건의 Val PESQ · "
               "나빠진 파일 = 입력보다 PESQ가 낮아진 validation 파일 비율 · 일반화 차 = train 개선 − "
               "validation 개선 (클수록 학습 화자에 치우침) · 학습 = 실행 epoch/선택 epoch · "
               "추론 속도 = 추론 시간 ÷ 음성 길이 (낮을수록 빠름) · 범주 장단점은 train 1,296개 기준"]
@@ -250,7 +282,7 @@ def add_run(run_id: str, note: str | None = None) -> dict:
     from se.checkpoint import read_checkpoint
     d = ROOT / "results" / "runs" / run_id
     per_split = {}
-    for split in ("validation", "train"):
+    for split in ("validation", "train", "newnoise"):
         if (d / split / "per_file.csv").exists():
             with open(d / split / "per_file.csv", encoding="utf-8-sig") as f:
                 per_split[split] = list(csv.DictReader(f))

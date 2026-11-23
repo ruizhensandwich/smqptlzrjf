@@ -38,3 +38,26 @@ def test_board_marks_best_and_judges(tmp_path, monkeypatch):
     assert "검증 PESQ 최고" in text and "가장 가벼움 (100,000" in text
     assert "과적합 경향" in text and "입력보다 나빠진 파일 50.0%" in text
     assert text.index("small") < text.index("big")      # oldest first
+
+
+def test_newnoise_scores_join_the_row_and_survive_a_validation_rescore(tmp_path, monkeypatch):
+    from tools import model_board as mb
+    monkeypatch.setattr(mb, "BOARD_CSV", tmp_path / "board.csv")
+    monkeypatch.setattr(mb, "BOARD_MD", tmp_path / "board.md")
+
+    def per_file(noisy, out):
+        base = {"noise_category": "wind", "noise_difficulty": "easy", "target_snr_db": "5.0",
+                "snr_db": "10"}
+        return [{**base, "segment_id": "a", "method": "noisy_input", "pesq": str(noisy)},
+                {**base, "segment_id": "a", "method": "m", "pesq": str(out)}]
+
+    info = {"weights_sha": "abc", "tag": "t", "date": "2026-11-23", "model": "mpsenet"}
+    assert not mb.set_newnoise("abc", per_file(1.2, 2.0), "m")          # no row yet
+    mb.save_row(mb.make_row({"validation": per_file(1.4, 3.0)}, "m", info))
+    assert mb.set_newnoise("abc", per_file(1.2, 2.0), "m")
+    mb.save_row(mb.make_row({"validation": per_file(1.4, 3.1)}, "m", info))
+    (row,) = mb.load_rows()
+    assert float(row["val_pesq"]) == 3.1 and float(row["new_pesq"]) == 2.0
+    assert abs(float(row["new_d_pesq"]) - 0.8) < 1e-9 and "새 잡음 PESQ" in mb.show()
+    both = mb.make_row({"validation": per_file(1.4, 3.0), "newnoise": per_file(1.0, 1.5)}, "m", info)
+    assert both["new_pesq"] == 1.5

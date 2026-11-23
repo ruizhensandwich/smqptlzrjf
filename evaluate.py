@@ -118,7 +118,10 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--weights", type=Path, default=SUBMISSION_WEIGHTS)
-    ap.add_argument("--split", choices=["validation", "train", "all"], default="validation")
+    ap.add_argument("--split", choices=["validation", "train", "newnoise", "all"],
+                    default="validation",
+                    help="newnoise = validation speech with unseen noise (tools/make_newnoise.py); "
+                         "all = train + validation, and newnoise if it has been built")
     ap.add_argument("--n", type=int, default=0, help="only the first n files (0 = all)")
     ap.add_argument("--tag", default="")
     ap.add_argument("--note", default="")
@@ -141,6 +144,8 @@ def main(argv=None) -> int:
     method = "submission" if args.round is not None else (args.tag or ckpt["model"])
     run_id = datetime.now().strftime("%Y%m%d-%H%M%S") + (f"_{args.tag}" if args.tag else "")
     splits = ["train", "validation"] if args.split == "all" else [args.split]
+    if args.split == "all" and args.round is None             and (data_root() / "newnoise" / "samples.csv").is_file():
+        splits.append("newnoise")
     try:
         weights_rel = weights.relative_to(HERE).as_posix()
     except ValueError:
@@ -204,6 +209,9 @@ def main(argv=None) -> int:
             "run_id": run_id, "tag": args.tag or ckpt["model"], "weights_sha": file_sha(weights),
             "rtf": round(rtf, 4), "infer_device": str(device), "note": args.note})
         model_board.save_row(row)
+    elif args.split == "newnoise" and not args.n and not args.no_board:
+        if not model_board.set_newnoise(file_sha(weights), per_split["newnoise"], method):
+            print("(these weights are not on the model board yet: score validation first)")
     print("\n" + model_board.show())
     return 0
 

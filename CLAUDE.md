@@ -79,6 +79,13 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
   가중치는 `weights/candidates/mpsenet_remix50.pt`에 보관. **`weights/submission.pt`는 아직 베이스라인**(1회차 미제출).
 - 같은 설정에 말소리 속도 변환(0.9~1.1배)만 추가(`configs/mpsenet_speed.json`): validation 3.113 / train 3.284,
   일반화 차 +0.095. epoch 간 흔들림(±0.02) 안이라 **효과 없음**.
+- MP-SENet 저자 공개 가중치(DNS Challenge 학습, `weights/pretrained/mpsenet_dns.pt`, 모델 설정 `source_axes: true` 필요)를
+  그대로 채점(2026-11-23): **validation 3.176 / train 2.980**. 과제 데이터를 본 적 없는 모델이 train보다 validation에서
+  0.27 더 개선한다(validation이 더 쉬운 묶음).
+- 그 가중치를 과제 train으로 이어 학습(`configs/mpsenet_pretrained_dns.json`, lr 1e-4, L4 2.8시간, 29 epoch에서 조기 종료,
+  29 epoch 선택): **validation 3.318 / SNR 19.82 dB, train 3.457** (일반화 차 +0.063). 현재 최고.
+  가중치는 `weights/candidates/mpsenet_dns_ft.pt`. 공개 가중치 대비 validation +0.14, train +0.48: 오른 폭의 대부분이
+  train의 화자·잡음에 맞춘 것이라, 새 잡음에서 이득인지는 아직 재지 않았다(새 잡음 검증셋 필요).
 - 학습 곡선의 모양: 60 epoch쯤 3.0, 80 epoch 이후 시간당 +0.03 이하, 막바지에 train만 오르고 validation이 멈춤.
   중단 조건은 `min_delta 0.01`, `patience 25`, `min_epochs 40`, `max_epochs 150`(사용자와 합의), 끝나면 VM 정지.
 

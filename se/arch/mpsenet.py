@@ -28,8 +28,9 @@ Magnitude and Phase Spectra", Interspeech 2023.
     SOFTWARE.
 
 The network (dense encoder, time/frequency transformer blocks, mask decoder,
-phase decoder) follows the source layer for layer, trained here from scratch
-(no pretrained weights). Changes made for this repository:
+phase decoder) follows the source layer for layer, so the source's published
+checkpoints (best_ckpt/g_best_dns, g_best_vb) load key for key; see
+`source_axes` below for what they need. Changes made for this repository:
 
   * one class with the harness interface `enhance(noisy[B, T]) -> [B, T]`; the
     STFT, the RMS normalisation of the input (dataset.py / inference.py in the
@@ -37,7 +38,13 @@ phase decoder) follows the source layer for layer, trained here from scratch
     arguments instead of a config object;
   * `batch_first=True` in the attention and the GRU. The source feeds
     [batch, sequence, channels] tensors to sequence-first modules; its README
-    recommends this fix for the attention when retraining;
+    recommends this fix for the attention when retraining. With
+    `source_axes=True` the blocks instead see the axes the source's own
+    checkpoints were trained on: there the module called time_transformer
+    runs along frequency and freq_transformer along time (for one file at a
+    time, which is how the source runs inference; in the source's training
+    batches the sequence also ran across the files of the batch, which is not
+    reproduced);
   * imaginary parts that are zero by construction (DC and Nyquist bins, first
     frame) are set to exactly zero before the phase is taken, see analysis().
     Otherwise float32 rounding noise decides between +pi and -pi there and the
@@ -92,15 +99,26 @@ class TransformerBlock(nn.Module):
 
 
 class TSTransformerBlock(nn.Module):
-    """Attention along time (each frequency on its own), then along frequency."""
+    """Attention along time (each frequency on its own), then along frequency.
 
-    def __init__(self, channels: int, n_heads: int = 4):
+    source_axes=True: time_transformer along frequency first, then freq_transformer
+    along time, which is what the source's published weights were trained to do.
+    """
+
+    def __init__(self, channels: int, n_heads: int = 4, source_axes: bool = False):
         super().__init__()
+        self.source_axes = source_axes
         self.time_transformer = TransformerBlock(channels, n_heads)
         self.freq_transformer = TransformerBlock(channels, n_heads)
 
     def forward(self, x):                                   # [B, C, T, F]
         b, c, t, f = x.shape
+        if self.source_axes:
+            x = x.permute(0, 2, 3, 1).reshape(b * t, f, c)
+            x = self.time_transformer(x) + x
+            x = x.view(b, t, f, c).permute(0, 2, 1, 3).reshape(b * f, t, c)
+            x = self.freq_transformer(x) + x
+            return x.view(b, f, t, c).permute(0, 3, 2, 1)
         x = x.permute(0, 3, 2, 1).reshape(b * f, t, c)
         x = self.time_transformer(x) + x
         x = x.view(b, f, t, c).permute(0, 2, 1, 3).reshape(b * t, f, c)
@@ -201,7 +219,8 @@ class MPSENet(nn.Module):
     def __init__(self, n_fft: int = 400, hop: int = 100, win: int = 400, dense_channel: int = 64,
                  num_tsblocks: int = 4, n_heads: int = 4, beta: float = 2.0,
                  compress_factor: float = 0.3, chunk_seconds: float = 6.0,
-                 overlap_seconds: float = 1.0, sample_rate: int = 16000):
+                 overlap_seconds: float = 1.0, sample_rate: int = 16000,
+                 source_axes: bool = False):
         super().__init__()
         if not (0 < hop <= win <= n_fft and n_fft % 2 == 0 and dense_channel % n_heads == 0):
             raise ValueError("need 0 < hop <= win <= n_fft (even) and dense_channel % n_heads == 0")
@@ -212,7 +231,7 @@ class MPSENet(nn.Module):
         self.overlap = int(overlap_seconds * sample_rate)
         self.dense_encoder = DenseEncoder(dense_channel, in_channel=2)
         self.TSTransformer = nn.ModuleList(
-            TSTransformerBlock(dense_channel, n_heads) for _ in range(num_tsblocks))
+            TSTransformerBlock(dense_channel, n_heads, source_axes) for _ in range(num_tsblocks))
         self.mask_decoder = MaskDecoder(dense_channel, n_fft // 2 + 1, beta)
         self.phase_decoder = PhaseDecoder(dense_channel)
         self.register_buffer("window", torch.hann_window(win), persistent=False)

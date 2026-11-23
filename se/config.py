@@ -55,6 +55,8 @@ DEFAULTS = {
     "model_args": {},
     "loss": "log_mag_l1",
     "discriminator": "",      # "" | "metric" (PESQ-predicting discriminator, se/trainers.py)
+    "init_weights": "",       # start from this checkpoint (path from the repository root) instead
+                              # of random weights; its model and model_args must equal this config's
     "data": DATA_DEFAULTS,
     "train": TRAIN_DEFAULTS,
     "note": "",

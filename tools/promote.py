@@ -6,7 +6,8 @@
         --summary path/to/training_summary.json --source "course example weights"
 
 The second form converts a bare state_dict (e.g. the course notebook's
-best_mask_cnn.pt) into the self-contained format denoise.py reads. The
+best_mask_cnn.pt, or a published checkpoint that keeps it under "generator")
+into the self-contained format denoise.py reads. The
 training facts the README must show (seed, epochs, selected epoch, validation
 score, settings) are stored in the file's "meta".
 """
@@ -39,6 +40,7 @@ def main(argv=None) -> int:
     ap.add_argument("--source", default="")
     ap.add_argument("--out", type=Path, default=WEIGHTS)
     args = ap.parse_args(argv)
+    args.out = args.out.resolve()
 
     if args.run:
         ckpt = read_checkpoint(args.run / args.checkpoint)
@@ -56,7 +58,8 @@ def main(argv=None) -> int:
         cfg = load_config(args.config)
         name, model_args = cfg["model"], cfg["model_args"]
         model = build_model(name, model_args)
-        model.load_state_dict(torch.load(args.state_dict, map_location="cpu", weights_only=True))
+        state = torch.load(args.state_dict, map_location="cpu", weights_only=True)
+        model.load_state_dict(state.get("generator", state))
         meta = {"seed": cfg["train"]["seed"], "config": cfg, "loss": cfg["loss"],
                 "config_path": args.config.as_posix(), "source": args.source}
         if args.summary:

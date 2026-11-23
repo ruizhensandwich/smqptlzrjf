@@ -193,3 +193,34 @@ def test_speed_changed_speech_is_new_but_the_pair_stays_consistent():
     assert whole[2][0].shape == (4000,)                    # faster = shorter, padded back
     with pytest.raises(ValueError):
         complete({"data": {"speed_prob": 0.5}})            # needs factors and remixing
+
+
+def test_source_axes_runs_the_blocks_as_the_source_code_does():
+    """The published checkpoints were trained by code that hands [batch, sequence, channels]
+    to sequence-first modules; source_axes=True must give that result for one file."""
+    from se.arch.mpsenet import TSTransformerBlock
+    torch.manual_seed(0)
+    block = TSTransformerBlock(8, 2, source_axes=True).eval()
+    x = torch.randn(1, 8, 5, 7)                                   # [B, C, T, F]
+    b, c, t, f = x.shape
+
+    def seq_first(module, y):                                     # what the source's call does
+        return module(y.transpose(0, 1)).transpose(0, 1)
+
+    with torch.inference_mode():
+        y = x.permute(0, 3, 2, 1).contiguous().view(b * f, t, c)  # the source's forward()
+        y = seq_first(block.time_transformer, y) + y
+        y = y.view(b, f, t, c).permute(0, 2, 1, 3).contiguous().view(b * t, f, c)
+        y = seq_first(block.freq_transformer, y) + y
+        want = y.view(b, t, f, c).permute(0, 3, 1, 2)
+        assert torch.allclose(block(x), want, atol=1e-6)
+        plain = TSTransformerBlock(8, 2)
+        plain.load_state_dict(block.state_dict())
+        assert not torch.allclose(plain.eval()(x), want, atol=1e-3)
+        two = torch.cat([x, torch.randn_like(x)])                 # files do not see each other
+        assert torch.allclose(block(two)[:1], block(x), atol=1e-5)
+
+
+def test_init_weights_must_be_the_same_model(tmp_path):
+    cfg = load_config(None, ['init_weights="weights/x.pt"'])
+    assert cfg["init_weights"] == "weights/x.pt" and complete({"model": "mask_cnn"})["init_weights"] == ""

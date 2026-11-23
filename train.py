@@ -41,7 +41,7 @@ from torch.utils.data import DataLoader
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from se.checkpoint import save_checkpoint  # noqa: E402
+from se.checkpoint import read_checkpoint, save_checkpoint  # noqa: E402
 from se.config import complete, load_config  # noqa: E402
 from se.data import PairedSpeech, RemixedSpeech  # noqa: E402
 from se import SAMPLE_RATE  # noqa: E402
@@ -152,6 +152,13 @@ def main(argv=None) -> int:
     val_loader = DataLoader(val_set, batch_size=t["val_batch_size"] or t["batch_size"],
                             shuffle=False)
     model = build_model(cfg["model"], cfg["model_args"]).to(device)
+    if cfg["init_weights"] and state is None:
+        init = read_checkpoint(ROOT / cfg["init_weights"])
+        if (init["model"], init["model_args"]) != (cfg["model"], cfg["model_args"]):
+            sys.exit(f"init_weights {cfg['init_weights']} is {init['model']} {init['model_args']}, "
+                     "not this config's model")
+        model.load_state_dict(init["state_dict"])
+        print(f"starting from {cfg['init_weights']} ({init['meta'].get('source', '')})", flush=True)
 
     best_pesq, ref_pesq, best_epoch, stale, start, history = -1.0, -1.0, 0, 0, 1, []
     elapsed_before = 0.0

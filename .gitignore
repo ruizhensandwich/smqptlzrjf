@@ -48,3 +48,7 @@ __pycache__/
 *.tmp
 ~$*
 runs_*.log
+
+# Downloads as published (the converted copy weights/pretrained/mpsenet_dns.pt is committed)
+/weights/pretrained/mpsenet/
+/weights/pretrained/mpsenet_vb.pt

@@ -63,6 +63,7 @@ python train.py --resume runs/<run_id>                          # 중단된 학�
 | 이 저장소의 파일 | 출처 | 라이선스 | 사용 방식 |
 |---|---|---|---|
 | `se/arch/mpsenet.py`, `se/arch/metric_discriminator.py`, `se/losses.py`의 `mpsenet`, `se/trainers.py`의 `MetricGANTrainer` | [yxlu-0102/MP-SENet](https://github.com/yxlu-0102/MP-SENet) (Lu, Ai, Ling, Interspeech 2023) | MIT | 모델·판별기·손실·학습 순서를 이식. 공개된 학습 가중치는 쓰지 않고 이 과제의 train 데이터로 처음부터 학습. 바꾼 점은 각 파일 첫머리에 기록 |
+| `weights/pretrained/mpsenet_dns.pt` | 같은 저장소의 `best_ckpt/g_best_dns` (저자 공개 가중치, DNS Challenge 데이터로 학습) | MIT (`weights/pretrained/LICENSE.MP-SENet`) | 가중치 값은 그대로 두고 이 저장소의 파일 형식으로만 변환(`tools/promote.py --state-dict`). 이어 학습의 출발점(`configs/mpsenet_pretrained_dns.json`의 `init_weights`)으로 쓴다. 이 가중치는 원본 코드의 축 순서로 학습됐으므로 모델 설정 `source_axes: true`가 필요하다 |
 
 참고 문헌 목록은 [`docs/references.json`](docs/references.json)에 있습니다.
 

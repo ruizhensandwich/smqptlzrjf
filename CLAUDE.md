@@ -12,7 +12,7 @@ validation 164쌍·화자 5명, 3초, 잡음 범주 23개, SNR 0/5/10/15 dB).
 - **추론은 `weights/submission.pt` 하나로.** 추론 중 다운로드 금지. 가중치 파일 95 MB 이하(GitHub 100 MB 한도).
 - **런타임(denoise.py)은 noisy만 읽는다.** clean은 학습(`train.py`)과 채점(`evaluate.py`, `tools/`)에서만.
 - **공개 금지:** `data/`(수강생 녹음), 모든 음성 파일, `docs/ai_usage/`(내역서), 인증 정보(서비스 계정 키, SSH 키, 토큰, `.env`). `.gitignore` + `tools/secret_scan.py`(pre-push 훅, `git config core.hooksPath .githooks`)로 막는다.
-- **외부 공개 데이터(음성·잡음)를 학습에 쓸 수 있다** (사용자 통보, 2026-11-23). 학습에만 쓰고, 출처·라이선스를 README에 적고, 저장소에는 올리지 않는다. **공개 pretrained 가중치도 쓸 수 있다**(사용자 통보, 2026-11-23): 학습의 출발점으로만 쓰고 추론은 여전히 `weights/submission.pt` 하나로, 출처·라이선스·학습 데이터를 README에 적는다.
+- **외부 공개 데이터(음성·잡음)를 학습에 쓸 수 있다** (사용자 통보, 2026-11-23). 학습에만 쓰고, 출처·라이선스를 README에 적고, 저장소에는 올리지 않는다. 조교가 허용한다고 답한 것은 "외부 데이터"까지다. **공개 pretrained 가중치는 조교 확인 전까지 제출에 쓰지 않는다**(실험·비교는 가능, 2026-11-23 사용자와 정리): 조교는 pretrained를 따로 언급하지 않았고, 공지는 "모델을 설계하고 학습하는 것"을 목표로 적는다. 쓰게 되면 학습의 출발점으로만, 추론은 `weights/submission.pt` 하나로, 출처·라이선스·학습 데이터를 README에 적는다.
 - **validation은 새 화자만 잰다.** validation의 잡음 원본(NOISEX-92 14개, Nonspeech 47개)은 전부 train에도 있다(2026-11-23 확인). 새 잡음에 대한 일반화는 validation PESQ로 알 수 없으므로 따로 잰다.
 - **가중치 선택은 validation PESQ 최고 epoch** (공지 권장). 대신 train 점수도 함께 기록하고, validation에만 맞춘 설정 선택이 반복되지 않게 본다(히든 테스트는 새 화자·잡음).
 - **AI 참고 문헌은 실재·내용을 직접 확인한 것만.** `docs/references.json`의 `checked_by`는 사람이 채운다.

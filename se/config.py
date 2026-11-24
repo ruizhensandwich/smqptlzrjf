@@ -50,6 +50,8 @@ DATA_DEFAULTS = {
     "speed_prob": 0.0,               # share of remixed items whose speech gets one of them
     "external_noise": "",            # "" | "esc50": noise pool that is not course data
     "external_noise_prob": 0.0,      # share of remixed items whose noise comes from that pool
+    "external_speech": "",           # "" | "zeroth": clean speech pool that is not course data
+    "external_speech_prob": 0.0,     # share of remixed items whose speech comes from that pool
 }
 
 DEFAULTS = {
@@ -98,6 +100,10 @@ def validate(cfg: dict) -> dict:
             or (d["external_noise_prob"] > 0 and not (d["external_noise"] and d["remix_prob"] > 0)):
         raise ValueError(f"data: external_noise is '' or one of {sorted(EXTERNAL_NOISE)}; "
                          "external_noise_prob needs it and remix_prob > 0")
+    from se.data import EXTERNAL_SPEECH
+    if d["external_speech"] not in ("", *EXTERNAL_SPEECH) or not 0 <= d["external_speech_prob"] <= 1             or (d["external_speech_prob"] > 0 and not (d["external_speech"] and d["remix_prob"] > 0)):
+        raise ValueError(f"data: external_speech is '' or one of {sorted(EXTERNAL_SPEECH)}; "
+                         "external_speech_prob needs it and remix_prob > 0")
     if d["segment_seconds"] < 0 or not 0 <= d["remix_prob"] <= 1 or \
             d["remix_snr_db"][0] > d["remix_snr_db"][1] or d["gain_db"][0] > d["gain_db"][1]:
         raise ValueError("data: segment_seconds >= 0, 0 <= remix_prob <= 1, ranges are [low, high]")

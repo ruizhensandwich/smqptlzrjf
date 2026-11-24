@@ -43,7 +43,7 @@ sys.path.insert(0, str(HERE))
 
 from se.checkpoint import read_checkpoint, save_checkpoint  # noqa: E402
 from se.config import complete, load_config  # noqa: E402
-from se.data import PairedSpeech, RemixedSpeech, data_root, load_external_noise  # noqa: E402
+from se.data import PairedSpeech, RemixedSpeech, data_root, load_external_noise, load_external_speech  # noqa: E402
 from se import SAMPLE_RATE  # noqa: E402
 from se.inference import pick_device  # noqa: E402
 from se.metrics import pesq_score  # noqa: E402
@@ -157,10 +157,15 @@ def main(argv=None) -> int:
     if d["segment_seconds"] > 0 or d["remix_prob"] > 0 or tuple(d["gain_db"]) != (0, 0):
         pool_noise = load_external_noise(d["external_noise"]) if d["external_noise_prob"] > 0 \
             else None
+        pool_speech = load_external_speech(d["external_speech"])             if d["external_speech_prob"] > 0 else None
         train_items = RemixedSpeech(train_set, int(round(d["segment_seconds"] * SAMPLE_RATE)),
                                     d["remix_prob"], d["remix_snr_db"], d["gain_db"],
                                     d["speed_factors"], d["speed_prob"],
-                                    pool_noise, d["external_noise_prob"])
+                                    pool_noise, d["external_noise_prob"],
+                                    pool_speech, d["external_speech_prob"])
+        if pool_speech is not None:
+            print(f"external speech: {len(pool_speech)} clips of {d['external_speech']} for "
+                  f"{d['external_speech_prob']:.0%} of the remixed items", flush=True)
         if pool_noise is not None:
             print(f"external noise: {len(pool_noise)} clips of {d['external_noise']} for "
                   f"{d['external_noise_prob']:.0%} of the remixed items", flush=True)

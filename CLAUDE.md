@@ -94,6 +94,12 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
   mpsenet_speed 2.888, DNS 공개 가중치 그대로 **3.336**, DNS 이어 학습 3.332. 과제 데이터만으로 학습한 모델은 새 잡음에서
   DNS 계열보다 0.5 낮다(validation에서는 0.04~0.19 차). 이어 학습은 새 잡음에서 이득 0(순간 잡음 −0.25, 0 dB 2.75 → 2.42):
   validation +0.14는 아는 잡음에 맞춘 몫이었다. DNS 계열 점수는 ESC-50과 DNS 잡음이 둘 다 Freesound 출처라 조금 유리할 수 있다.
+- 외부 잡음을 섞어 처음부터 학습(`configs/mpsenet_esc.json`, 2026-11-24, L4 10.5시간, 103 epoch에서 사용자 지시로 중단,
+  103 epoch 선택): 재혼합 항목의 절반(전체의 25 %)이 ESC-50 fold 1~4 잡음. **validation 3.043 / 새 잡음 3.055 / train 3.212**.
+  mpsenet_remix50 대비 새 잡음 **+0.228**(95 % 구간 +0.16~+0.30, 109개 개선·46개 악화), validation **−0.089**(164개 중 135개 악화,
+  모든 SNR·난이도에서 고르게). DNS 공개 가중치(새 잡음 3.336)까지는 아직 0.28. 학습 내내 validation과 새 잡음 곡선이 붙어 갔다
+  (상관 0.97, validation 최고 epoch를 골라도 새 잡음 최고와 0.005 차). 가중치는 `weights/candidates/mpsenet_esc.pt`.
+  주의: 학습 잡음과 검증 잡음이 같은 ESC-50의 다른 fold(같은 50종)라 새 잡음 이득이 실제보다 크게 보일 수 있다.
 - 학습 곡선의 모양: 60 epoch쯤 3.0, 80 epoch 이후 시간당 +0.03 이하, 막바지에 train만 오르고 validation이 멈춤.
   중단 조건은 `min_delta 0.01`, `patience 25`, `min_epochs 40`, `max_epochs 150`(사용자와 합의), 끝나면 VM 정지.
 

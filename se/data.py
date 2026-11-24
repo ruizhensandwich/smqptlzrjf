@@ -29,6 +29,10 @@ from se import SAMPLE_RATE
 
 REPO = Path(__file__).resolve().parents[1]
 SPLITS = ("train", "validation")
+# External noise pools for training (built by tools/make_external_noise.py, never committed).
+# ESC-50 fold 5 is the noise of the "newnoise" evaluation split and is never part of a pool.
+EXTERNAL_NOISE = {"esc50": "external/esc50/train_noise_16k.npy"}
+HELD_OUT_ESC_FOLD = 5
 MANIFEST_COLUMNS = {"segment_id", "clean_path", "noisy_path", "sample_rate_hz", "num_samples",
                     "noise_category", "noise_collection", "noise_code", "noise_difficulty",
                     "target_snr_db", "split"}
@@ -91,6 +95,20 @@ def load_waveforms(split: str, root: Path | None = None, rebuild: bool = False) 
         np.save(t, w, allow_pickle=False)
         t.replace(cache)
     return w
+
+
+def load_external_noise(name: str, root: Path | None = None) -> torch.Tensor:
+    """The pool `name` as float32 [clips, samples]; its list must not contain the held-out fold."""
+    if name not in EXTERNAL_NOISE:
+        raise ValueError(f"unknown external noise {name!r}; known: {sorted(EXTERNAL_NOISE)}")
+    path = (root or data_root()) / EXTERNAL_NOISE[name]
+    if not path.is_file():
+        raise FileNotFoundError(f"{path} is missing: run python tools/make_external_noise.py --fetch")
+    with open(path.with_suffix(".csv"), encoding="utf-8") as f:
+        folds = {int(r["fold"]) for r in csv.DictReader(f)}
+    if HELD_OUT_ESC_FOLD in folds:
+        raise ValueError(f"{path} contains fold {HELD_OUT_ESC_FOLD}, the newnoise evaluation noise")
+    return torch.from_numpy(np.load(path, allow_pickle=False).astype(np.float32) / 32768.0)
 
 
 class PairedSpeech(Dataset):
@@ -165,14 +183,30 @@ class RemixedSpeech(Dataset):
     possible for remixed items, where the noisy signal is built from the
     clean one.
 
+    With external_noise (a [clips, samples] tensor of recordings that are not
+    course data) a remixed item takes its noise from that pool with probability
+    external_prob instead of from another train pair; SNR is again power of the
+    whole clean file over power of the whole noise clip.
+
     Nothing is written to disk; the draws come from torch's global generator,
     so train.py's seed reproduces them. Only train data is used: the noise
     recordings are the same, their combinations, levels and the voices vary.
     """
 
     def __init__(self, base: PairedSpeech, segment_samples: int = 0, remix_prob: float = 0.0,
-                 snr_db=(-5.0, 20.0), gain_db=(0.0, 0.0), speed_factors=(), speed_prob: float = 0.0):
+                 snr_db=(-5.0, 20.0), gain_db=(0.0, 0.0), speed_factors=(), speed_prob: float = 0.0,
+                 external_noise: torch.Tensor | None = None, external_prob: float = 0.0):
         n = base.waveforms.shape[-1]
+        if not 0 <= external_prob <= 1 or (external_prob > 0 and (
+                external_noise is None or remix_prob <= 0 or external_noise.shape[-1] < n)):
+            raise ValueError("external_prob needs remix_prob > 0 and an external_noise pool of "
+                             "clips at least as long as the train files")
+        self.external = external_noise if external_prob > 0 else None
+        self.external_prob = external_prob
+        if self.external is not None:
+            self.external_power = self.external.double().pow(2).mean(-1)
+            if float(self.external_power.min()) <= 0:
+                raise ValueError("the external noise pool has a silent clip")
         if not 0 <= segment_samples <= n or not 0 <= remix_prob <= 1 or not 0 <= speed_prob <= 1:
             raise ValueError(f"need 0 <= segment_samples <= {n} and probabilities in [0, 1]")
         if snr_db[0] > snr_db[1] or gain_db[0] > gain_db[1]:
@@ -228,14 +262,19 @@ class RemixedSpeech(Dataset):
                 clean.numpy().astype(np.float64), ratio.denominator, ratio.numerator)).float()
             power = clean.double().pow(2).mean()
         clean_seg = self._segment(clean)
-        j = self.material[self._randint(len(self.material))]
-        noise = self.base.waveforms[j, 0] - self.base.waveforms[j, 1]
+        if self.external is not None and float(torch.rand(())) < self.external_prob:
+            j = self._randint(len(self.external))
+            noise, noise_power = self.external[j], self.external_power[j]
+        else:
+            j = self.material[self._randint(len(self.material))]
+            noise = self.base.waveforms[j, 0] - self.base.waveforms[j, 1]
+            noise_power = self.noise_power[j]
         if self.segment == noise.shape[-1]:           # whole file: shift the noise in time instead
             noise = torch.roll(noise, self._randint(self.segment))
         else:
             noise = self._segment(noise)
         snr = self._uniform(*self.snr_db)
-        scale = torch.sqrt(power / (self.noise_power[j] * 10 ** (snr / 10)))
+        scale = torch.sqrt(power / (noise_power * 10 ** (snr / 10)))
         return clean_seg + noise * scale.float(), clean_seg
 
     def __getitem__(self, i):

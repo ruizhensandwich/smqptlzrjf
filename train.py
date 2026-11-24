@@ -43,7 +43,7 @@ sys.path.insert(0, str(HERE))
 
 from se.checkpoint import read_checkpoint, save_checkpoint  # noqa: E402
 from se.config import complete, load_config  # noqa: E402
-from se.data import PairedSpeech, RemixedSpeech  # noqa: E402
+from se.data import PairedSpeech, RemixedSpeech, data_root, load_external_noise  # noqa: E402
 from se import SAMPLE_RATE  # noqa: E402
 from se.inference import pick_device  # noqa: E402
 from se.metrics import pesq_score  # noqa: E402
@@ -83,6 +83,22 @@ def validate(model, loader, trainer, device, pool) -> tuple[float, float]:
     if len(scores) != len(loader.dataset) or not np.all(np.isfinite(scores)):
         raise RuntimeError("PESQ failed on some validation files")
     return total / len(loader.dataset), float(np.mean(scores))
+
+
+def _pesq_pair(item):
+    clean, estimate = item
+    return pesq_score(clean, estimate)[0]
+
+
+@torch.inference_mode()
+def mean_pesq(model, dataset, batch_size, device, pool) -> float:
+    """Mean PESQ-WB of a whole split; a look only, nothing is selected by it."""
+    model.eval()
+    estimates = []
+    for noisy, _ in DataLoader(dataset, batch_size=batch_size, shuffle=False):
+        estimates.extend(model.enhance(noisy.to(device)).float().cpu().numpy())
+    clean = dataset.waveforms[:, 1].numpy()
+    return float(np.nanmean(list(pool.map(_pesq_pair, zip(clean, estimates), chunksize=4))))
 
 
 def append_log(row: dict) -> None:
@@ -139,9 +155,15 @@ def main(argv=None) -> int:
     d = cfg["data"]
     train_items = train_set
     if d["segment_seconds"] > 0 or d["remix_prob"] > 0 or tuple(d["gain_db"]) != (0, 0):
+        pool_noise = load_external_noise(d["external_noise"]) if d["external_noise_prob"] > 0 \
+            else None
         train_items = RemixedSpeech(train_set, int(round(d["segment_seconds"] * SAMPLE_RATE)),
                                     d["remix_prob"], d["remix_snr_db"], d["gain_db"],
-                                    d["speed_factors"], d["speed_prob"])
+                                    d["speed_factors"], d["speed_prob"],
+                                    pool_noise, d["external_noise_prob"])
+        if pool_noise is not None:
+            print(f"external noise: {len(pool_noise)} clips of {d['external_noise']} for "
+                  f"{d['external_noise_prob']:.0%} of the remixed items", flush=True)
         if d["remix_prob"] > 0:
             print(f"remixing: {len(train_items.material)} of {len(train_set)} train pairs usable "
                   f"as noise material ({len(train_items.excluded)} excluded)", flush=True)
@@ -151,6 +173,10 @@ def main(argv=None) -> int:
                               num_workers=t["num_workers"])
     val_loader = DataLoader(val_set, batch_size=t["val_batch_size"] or t["batch_size"],
                             shuffle=False)
+    # Unseen-noise split (tools/make_newnoise.py), scored every epoch if it has been built.
+    # Weights are still selected by validation PESQ only.
+    newnoise_set = PairedSpeech("newnoise") \
+        if (data_root() / "newnoise" / "samples.csv").is_file() else None
     model = build_model(cfg["model"], cfg["model_args"]).to(device)
     if cfg["init_weights"] and state is None:
         init = read_checkpoint(HERE / cfg["init_weights"])
@@ -171,6 +197,8 @@ def main(argv=None) -> int:
             history = [{k: int(float(v)) if k in ("epoch", "best_epoch", "stale_epochs")
                         else float(v) for k, v in r.items()} for r in csv.DictReader(f)]
         history = [h for h in history if h["epoch"] < start]
+        if history and "newnoise_pesq" not in history[0]:
+            newnoise_set = None             # a run started before the split existed keeps its columns
         print(f"resuming {run_id} at epoch {start}")
 
     config_path = "" if args.resume else (args.config.as_posix() if args.config else "")
@@ -212,6 +240,9 @@ def main(argv=None) -> int:
             else:
                 stale += 1
             trainer.end_epoch(val_pesq)
+            if newnoise_set is not None:
+                train_stats["newnoise_pesq"] = mean_pesq(
+                    model, newnoise_set, t["val_batch_size"] or t["batch_size"], device, pool)
             elapsed = elapsed_before + time.perf_counter() - started
             history.append({"epoch": epoch, "train_loss": train_loss, "validation_loss": val_loss,
                             "validation_pesq_wb": val_pesq, "learning_rate": lr,

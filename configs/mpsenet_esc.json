@@ -1,0 +1,18 @@
+{
+  "model": "mpsenet",
+  "model_args": {"n_fft": 400, "hop": 100, "win": 400, "dense_channel": 64, "num_tsblocks": 4,
+                 "n_heads": 4, "beta": 2.0, "compress_factor": 0.3},
+  "loss": "mpsenet",
+  "discriminator": "metric",
+  "data": {"segment_seconds": 2.0, "remix_prob": 0.5, "remix_snr_db": [-5.0, 20.0],
+           "gain_db": [0.0, 0.0],
+           "external_noise": "esc50", "external_noise_prob": 0.5},
+  "train": {
+    "seed": 1234, "batch_size": 4, "val_batch_size": 4,
+    "optimizer": "adamw", "lr": 0.0005, "adam_betas": [0.8, 0.99], "weight_decay": 0.01,
+    "scheduler": "exponential", "lr_gamma": 0.99,
+    "max_epochs": 150, "min_epochs": 40, "patience": 25, "min_delta": 0.01,
+    "save_epochs": [25, 50, 75, 100, 125]
+  },
+  "note": "One change against mpsenet_remix50: half of the remixed items take their noise from ESC-50 folds 1-4 (1,600 clips that are not course data) instead of another train pair. So 50 % of the items are as recorded, 25 % course speech + course noise, 25 % course speech + ESC-50 noise. From scratch, no pretrained weights. Fold 5 is the newnoise evaluation split and is not in the pool."
+}

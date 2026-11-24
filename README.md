@@ -70,6 +70,7 @@ python train.py --resume runs/<run_id>                          # 중단된 학�
 
 | 데이터 | 출처 | 라이선스 | 사용 방식 |
 |---|---|---|---|
+| ESC-50 fold 1~4 (환경음 1,600개, 50종) | [karolpiczak/ESC-50](https://github.com/karolpiczak/ESC-50) (Piczak, ACM MM 2015) | CC BY-NC 3.0 | **학습에** 사용. `tools/make_external_noise.py --fetch`가 잡음 풀을 만들고, 설정 `data.external_noise: "esc50"`, `data.external_noise_prob`만큼의 재혼합 항목이 과제 잡음 대신 이 잡음을 쓴다(`configs/mpsenet_esc.json`) |
 | ESC-50 fold 5 (환경음 400개, 50종) | [karolpiczak/ESC-50](https://github.com/karolpiczak/ESC-50) (Piczak, ACM MM 2015) | CC BY-NC 3.0 | **채점에만** 사용. `tools/make_newnoise.py`가 validation 말소리 164개에 같은 SNR로 섞어 "새 잡음" 검증셋(`data/newnoise/`)을 만든다. 학습에는 쓰지 않는다 |
 
 참고 문헌 목록은 [`docs/references.json`](docs/references.json)에 있습니다.

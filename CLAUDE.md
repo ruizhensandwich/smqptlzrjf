@@ -33,6 +33,7 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
 | 채점 (16비트 출력 기준) | `python evaluate.py --weights runs/<id>/best.pt --split all --tag T` |
 | 새 잡음 검증셋 만들기 / 채점 | `python tools/make_newnoise.py [--fetch]` → `data/newnoise/` / `python evaluate.py --weights W --split newnoise --tag T` (`--split all`은 있으면 함께 채점) |
 | 외부 잡음 풀(학습용, ESC-50 fold 1~4) | `python tools/make_external_noise.py [--fetch]` → `data/external/esc50/train_noise_16k.npy` (설정 `data.external_noise`, `data.external_noise_prob`) |
+| 외부 음성 풀(학습용 clean, Zeroth-Korean) | `python tools/make_external_speech.py [--min-range-db 45 --per-speaker 60]` → `data/external/zeroth/train_speech_16k.npy` + `speakers.csv` (설정 `data.external_speech`, `data.external_speech_prob`). 원본은 VM의 `data/external/zeroth/full/`에만 있다 |
 | 모델 비교표 (모든 모델의 PESQ·장단점) | `python tools/model_board.py` → `results/model_board.md` |
 | 스펙트로그램·청취 비교 | `python tools/spectrogram.py --models runs/<A> runs/<B> [--pick diverse\|worst\|best --n 4]` / `<segment_id> ...` / `--noisy any.wav [--clean ref.wav]` → `results/listening/<time>/index.html` (학생 녹음 포함: git 제외·공개 금지) |
 | 두 실행 비교 | `python compare.py <runA> <runB> [--split train]` |
@@ -100,6 +101,10 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
   모든 SNR·난이도에서 고르게). DNS 공개 가중치(새 잡음 3.336)까지는 아직 0.28. 학습 내내 validation과 새 잡음 곡선이 붙어 갔다
   (상관 0.97, validation 최고 epoch를 골라도 새 잡음 최고와 0.005 차). 가중치는 `weights/candidates/mpsenet_esc.pt`.
   주의: 학습 잡음과 검증 잡음이 같은 ESC-50의 다른 fold(같은 50종)라 새 잡음 이득이 실제보다 크게 보일 수 있다.
+- 외부 음성 풀 준비(2026-11-25, 아직 학습에 쓰지 않음): Zeroth-Korean(OpenSLR 40, CC BY 4.0) 22,720개 전체를 VM에서 측정.
+  말소리−바닥 잡음 간격의 화자별 중앙값이 45 dB 미만인 10명(174, 183, 189, 194, 197, 203, 204, 206, 209, 217)을 제외(사용자 결정),
+  넘친 파일 340개 제외, 화자당 최대 60개 → **105명, 3초 구간 6,096개**(VM에만 있음, 558 MB). 재혼합 항목의 말소리를 이 풀로 바꾸고
+  크기는 원래 항목의 clean에 맞춘다. 비율과 섞을 잡음은 사용자 결정 대기.
 - 학습 곡선의 모양: 60 epoch쯤 3.0, 80 epoch 이후 시간당 +0.03 이하, 막바지에 train만 오르고 validation이 멈춤.
   중단 조건은 `min_delta 0.01`, `patience 25`, `min_epochs 40`, `max_epochs 150`(사용자와 합의), 끝나면 VM 정지.
 

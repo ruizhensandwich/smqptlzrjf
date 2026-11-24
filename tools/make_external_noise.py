@@ -9,7 +9,9 @@ fold. **Fold 5 is the noise of the "newnoise" evaluation split (tools/make_newno
 is refused here**, so a model trained with this pool has never heard that split's noise.
 
 Each clip: mono, 16 kHz, its loudest 3 s (many clips are padded with silence), stored as
-int16. Output next to the clips, read by se/data.py (config data.external_noise = "esc50"):
+int16. Left out: clips cut from a source recording that fold 5 also has a clip of (ESC-50
+keeps sources within a fold with a few exceptions), and clips whose loudest 3 s are below
+-60 dB (scaled up to a training SNR they would be amplified digital silence). Output next to the clips, read by se/data.py (config data.external_noise = "esc50"):
     train_noise_16k.npy   [clips, 48000] int16
     train_noise_16k.csv   filename, category, fold, start_s  (row i = clip i)
 Nothing here is committed: data/ is git-ignored.
@@ -29,10 +31,17 @@ sys.path.insert(0, str(ROOT))
 
 from se import SAMPLE_RATE  # noqa: E402
 from se.data import EXTERNAL_NOISE, HELD_OUT_ESC_FOLD, data_root  # noqa: E402
-from tools.make_newnoise import (MIN_NOISE_POWER, esc_dir, fetch, loudest_window,  # noqa: E402
-                                 read_esc_meta, to_16k_mono)
+from tools.make_newnoise import (esc_dir, fetch, loudest_window, read_esc_meta,  # noqa: E402
+                                 to_16k_mono)
 
 SECONDS = 3
+MIN_POOL_POWER = 1e-6           # -60 dB
+
+
+def usable(rows: list[dict], held_out_rows: list[dict]) -> list[dict]:
+    """rows without the clips whose source recording also appears in the held-out fold."""
+    held = {r["src_file"] for r in held_out_rows}
+    return [r for r in rows if r["src_file"] not in held]
 
 
 def training_folds(folds) -> list[int]:
@@ -46,12 +55,13 @@ def training_folds(folds) -> list[int]:
 def build(folder: Path, folds: list[int]) -> tuple[np.ndarray, list[dict]]:
     n = SECONDS * SAMPLE_RATE
     clips, rows = [], []
+    held_out = read_esc_meta(folder, HELD_OUT_ESC_FOLD)
     for fold in training_folds(folds):
-        for r in sorted(read_esc_meta(folder, fold), key=lambda r: r["filename"]):
+        for r in sorted(usable(read_esc_meta(folder, fold), held_out), key=lambda r: r["filename"]):
             x, rate = sf.read(str(folder / "audio" / r["filename"]), dtype="float64")
             w, start = loudest_window(to_16k_mono(x, rate), n)
-            if np.mean(w ** 2) < MIN_NOISE_POWER:
-                continue                                    # silent clip: not noise
+            if np.mean(w ** 2) < MIN_POOL_POWER:
+                continue                                    # next to silent: not noise
             clips.append(np.round(np.clip(w, -1.0, 32767 / 32768) * 32768).astype(np.int16))
             rows.append({"filename": r["filename"], "category": r["category"], "fold": fold,
                          "start_s": round(start / SAMPLE_RATE, 2)})

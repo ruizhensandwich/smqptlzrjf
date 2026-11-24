@@ -6,7 +6,7 @@ import torch
 
 from se.config import load_config
 from se.data import EXTERNAL_NOISE, HELD_OUT_ESC_FOLD, RemixedSpeech, load_external_noise
-from tools.make_external_noise import training_folds
+from tools.make_external_noise import training_folds, usable
 
 
 class Base:
@@ -28,6 +28,8 @@ def test_the_held_out_fold_can_never_be_training_material(tmp_path):
     for bad in ([5], [1, 5], [], [0]):
         with pytest.raises(ValueError):
             training_folds(bad)
+    rows = [{"filename": "4-1-A-0.wav", "src_file": "1"}, {"filename": "4-2-A-0.wav", "src_file": "2"}]
+    assert usable(rows, [{"filename": "5-2-A-3.wav", "src_file": "2"}]) == rows[:1]
     path = tmp_path / EXTERNAL_NOISE["esc50"]
     path.parent.mkdir(parents=True)
     np.save(path, np.full((2, 16000), 100, dtype=np.int16))

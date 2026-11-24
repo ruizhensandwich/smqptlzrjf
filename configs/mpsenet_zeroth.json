@@ -1,0 +1,19 @@
+{
+  "model": "mpsenet",
+  "model_args": {"n_fft": 400, "hop": 100, "win": 400, "dense_channel": 64, "num_tsblocks": 4,
+                 "n_heads": 4, "beta": 2.0, "compress_factor": 0.3},
+  "loss": "mpsenet",
+  "discriminator": "metric",
+  "data": {"segment_seconds": 2.0, "remix_prob": 0.5, "remix_snr_db": [-5.0, 20.0],
+           "gain_db": [0.0, 0.0],
+           "external_noise": "esc50", "external_noise_prob": 0.5,
+           "external_speech": "zeroth", "external_speech_prob": 0.5},
+  "train": {
+    "seed": 1234, "batch_size": 4, "val_batch_size": 4,
+    "optimizer": "adamw", "lr": 0.0005, "adam_betas": [0.8, 0.99], "weight_decay": 0.01,
+    "scheduler": "exponential", "lr_gamma": 0.99,
+    "max_epochs": 150, "min_epochs": 40, "patience": 25, "min_delta": 0.01,
+    "save_epochs": [25, 50, 75, 100, 125]
+  },
+  "note": "One change against mpsenet_esc: half of the remixed items take their speech from Zeroth-Korean (OpenSLR 40, CC BY 4.0; 6,096 three-second clips of 105 speakers, the 10 speakers with background noise left out) instead of the course clean file, scaled to that file's level. So 50 % of the items are as recorded, 25 % course speech remixed, 25 % Zeroth speech remixed; the noise of a remixed item is course or ESC-50 (folds 1-4) half and half as before. From scratch, no pretrained weights."
+}

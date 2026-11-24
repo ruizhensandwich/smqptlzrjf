@@ -203,7 +203,7 @@ class RemixedSpeech(Dataset):
     With external_speech (a [clips, samples] tensor of clean speech that is not
     course data) a remixed item takes its speech from that pool with probability
     speech_prob instead of pair i's clean file, scaled to the power of pair i's
-    clean file (so levels stay the course's). The noise is drawn as before.
+    clean file (so levels stay the course's; less if that would pass full scale). The noise is drawn as before.
 
     Nothing is written to disk; the draws come from torch's global generator,
     so train.py's seed reproduces them. Only train data is used: the noise
@@ -223,6 +223,7 @@ class RemixedSpeech(Dataset):
         self.speech_prob = speech_prob
         if self.speech is not None:
             self.speech_power = self.speech.double().pow(2).mean(-1)
+            self.speech_peak = self.speech.abs().amax(-1).tolist()
             if float(self.speech_power.min()) <= 0:
                 raise ValueError("the external speech pool has a silent clip")
         if not 0 <= external_prob <= 1 or (external_prob > 0 and (
@@ -286,7 +287,8 @@ class RemixedSpeech(Dataset):
         power = self.clean_power[i]
         if self.speech is not None and float(torch.rand(())) < self.speech_prob:
             k = self._randint(len(self.speech))                  # same level as pair i's speech
-            clean = self.speech[k] * torch.sqrt(power / self.speech_power[k]).float()
+            scale = min(float(torch.sqrt(power / self.speech_power[k])), 0.99 / self.speech_peak[k])
+            clean, power = self.speech[k] * scale, self.speech_power[k] * scale ** 2
         if self.speed_prob > 0 and float(torch.rand(())) < self.speed_prob:
             ratio = self.speed_ratios[self._randint(len(self.speed_ratios))]
             clean = torch.from_numpy(resample_poly(

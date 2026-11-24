@@ -77,3 +77,15 @@ def test_pool_loading_and_config_checks(tmp_path):
     cfg = load_config(None, ['data.external_speech="zeroth"', "data.external_speech_prob=0.5",
                              "data.remix_prob=0.5"])
     assert cfg["data"]["external_speech_prob"] == 0.5
+
+
+def test_external_speech_is_not_scaled_past_full_scale():
+    base = Base()
+    click = torch.zeros(1, 16000)
+    click[0, ::4000] = 0.5                                               # tiny power, high peak
+    torch.manual_seed(1)
+    items = RemixedSpeech(base, 0, 1.0, (20.0, 20.0), external_speech=click, speech_prob=1.0)
+    noisy, clean = items[0]
+    assert float(clean.abs().max()) <= 0.99 + 1e-6
+    snr = 10 * torch.log10(clean.pow(2).mean() / (noisy - clean).pow(2).mean())
+    assert abs(float(snr) - 20.0) < 1e-2                                 # SNR follows the real level

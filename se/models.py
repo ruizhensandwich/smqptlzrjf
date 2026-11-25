@@ -92,11 +92,17 @@ def _xlstm_senet(**model_args) -> nn.Module:
     return XLSTMSENet(**model_args)
 
 
+def _mossformer_gan_se(**model_args) -> nn.Module:
+    from se.arch.mossformer_gan_se import MossFormerGANSE16K   # imported on use: needs einops
+    return MossFormerGANSE16K(**model_args)
+
+
 MODELS: dict[str, type[nn.Module]] = {
     "mask_cnn": MaskCNN,
     "mpsenet": MPSENet,          # se/arch/mpsenet.py (MP-SENet, MIT License)
     "xlstm_senet": _xlstm_senet,  # se/arch/xlstm_senet/ (xLSTM-SENet, MIT License)
-    "ensemble": Ensemble,        # weighted mean of member models (tools/make_ensemble.py)
+    "mossformer_gan_se": _mossformer_gan_se,  # se/arch/mossformer_gan_se/ (ClearerVoice, Apache-2.0)
+    "ensemble": Ensemble,       # weighted mean of member models (tools/make_ensemble.py)
 }
 
 

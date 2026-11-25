@@ -45,7 +45,7 @@ python denoise.py
 
 | 회차 | 태그 | 커밋 | 런어스 제출일 | 모델 | Validation PESQ | Validation SNR (dB) | Train PESQ | Train SNR (dB) | 히든 테스트 PESQ |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | `submission-1` | 태그 참조 | - | MP-SENet (2.26M), 처음부터 학습: 동적 재혼합 50 % + 외부 잡음 ESC-50 fold 1~4, 100 epoch 가중치 | 3.022 | 18.01 | 3.197 | 18.12 | - |
+| 1 | `submission-1` | `b922a40` | 2026-11-25 | MP-SENet (2.26M), 처음부터 학습: 동적 재혼합 50 % + 외부 잡음 ESC-50 fold 1~4, 100 epoch 가중치 | 3.022 | 18.01 | 3.197 | 18.12 | - |
 
 평가할 코드 버전 = 해당 회차 **태그**가 가리키는 커밋 (`git checkout <태그>`). 점수는 `denoise.py`가 쓰는 16비트 WAV 그대로 채점한 Validation 164개·Train 1,296개 전체의 파일별 평균이며, 상세 결과는 [`results/submissions/`](results/submissions/) (train은 `roundN/train/`).
 <!-- submissions:end -->

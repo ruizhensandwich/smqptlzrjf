@@ -85,8 +85,8 @@
       },
       "code_fingerprint": "65021a567a42",
       "method_summary": "MP-SENet (2.26M), 처음부터 학습: 동적 재혼합 50 % + 외부 잡음 ESC-50 fold 1~4, 100 epoch 가중치",
-      "commit": null,
-      "submitted_at": null,
+      "commit": "b922a40b72d986e68298f49b71c03c94ca812bc4",
+      "submitted_at": "2026-11-25",
       "leaderboard": null
     }
   ]

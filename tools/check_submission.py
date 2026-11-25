@@ -284,7 +284,7 @@ def main(argv=None):
         print("code:", checkout_code(tag_name(args.round), repo, rep))
         venv = tmp / "venv"
         try:
-            sh([*shlex.split(args.python), "-m", "venv", str(venv)])
+            sh([*([args.python] if Path(args.python).exists() else shlex.split(args.python)), "-m", "venv", str(venv)])
             py = venv / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
             sh([str(py), "-m", "pip", "install", "-q", "--disable-pip-version-check",
                 "-r", "requirements.txt"], cwd=repo)

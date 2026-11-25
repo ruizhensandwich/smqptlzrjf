@@ -34,6 +34,7 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
 | 재혼합 재료 확인 (noisy − clean이 깨끗한 잡음인지) | `python tools/check_mixing.py` → `results/mixing_check/` |
 | 채점 (16비트 출력 기준) | `python evaluate.py --weights runs/<id>/best.pt --split all --tag T` |
 | 새 잡음 검증셋 만들기 / 채점 | `python tools/make_newnoise.py [--fetch]` → `data/newnoise/` / `python evaluate.py --weights W --split newnoise --tag T` (`--split all`은 있으면 함께 채점) |
+| 어려운 검증셋 만들기 / 채점 | `python tools/make_hardset.py` → `data/hard/` (validation 말소리 164개 × 4묶음: lowsnr·newlow·babble·reverb, ESC-50 fold 5와 Zeroth 제외 화자 10명 필요) / `python evaluate.py --weights W --split hard --tag T --no-board` (묶음별 한 줄) |
 | 외부 잡음 풀(학습용, ESC-50 fold 1~4) | `python tools/make_external_noise.py [--fetch]` → `data/external/esc50/train_noise_16k.npy` (설정 `data.external_noise`, `data.external_noise_prob`) |
 | 외부 음성 풀(학습용 clean, Zeroth-Korean) | `python tools/make_external_speech.py [--min-range-db 45 --per-speaker 60]` → `data/external/zeroth/train_speech_16k.npy` + `speakers.csv` (설정 `data.external_speech`, `data.external_speech_prob`). 원본은 VM의 `data/external/zeroth/full/`에만 있다 |
 | 모델 비교표 (모든 모델의 PESQ·장단점) | `python tools/model_board.py` → `results/model_board.md` |
@@ -129,6 +130,15 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
   새 잡음 **2.586**. 같은 조건의 MP-SENet(57 epoch 2.945)보다 낮고 추론은 약 6배 느리다. mpsenet_esc와 출력 평균(7:3)은
   75 epoch 기준 validation 3.006(+0.04) / 새 잡음 2.922(−0.08), 103 epoch 기준(8:2) 3.060(+0.02) / 2.998(−0.06): **새 잡음에서 손해라 제출에 쓰지 않는다**(사용자 결정).
   가중치 `weights/candidates/xlstm_ep57.pt`는 기록용(평균 파일은 `tools/make_ensemble.py`로 다시 만든다).
+- 히든 테스트(1회차, mpsenet_esc 100 epoch): **약 2.4** (조교: 1차보다 어렵게 구성). validation 3.02, 새 잡음 3.05 둘 다 예측 못 함.
+- **어려운 검증셋**(`tools/make_hardset.py`, 2026-11-25): validation 말소리 164개마다 한 가지만 바꾼 4묶음 656개.
+  lowsnr = 같은 쌍의 잡음을 −5/0 dB로, newlow = ESC-50 fold 5를 −5/0 dB로, babble = Zeroth 제외 화자 10명 중 3~6명의 동시 발화(원래 SNR),
+  reverb = 합성 잔향(RT60 0.3~0.8 s) + 원래 잡음, 기준은 잔향 없는 clean. 입력 1.206. 결과(전체 / lowsnr / newlow / babble / reverb):
+  round1 1.959 / 1.99 / 2.10 / 2.18 / 1.58, mpsenet_esc(103) 1.968, remix50 1.886, zeroth(39) 1.773,
+  **DNS 공개 가중치 2.308 / 2.27 / 2.50 / 2.83 / 1.63, DNS 이어 학습 2.322 / 2.37 / 2.44 / 2.85 / 1.63**.
+  DNS 계열이 잔향 말고 모든 묶음에서 round1보다 +0.29~+0.65(babble 최대, 164개 중 152개). 이어 학습 대 공개 가중치: lowsnr +0.10(과제 잡음),
+  newlow −0.06(새 잡음, 95 % 구간 −0.12~−0.01), babble·reverb 차이 없음. **잔향은 모든 모델이 1.6 근처로 못 다룬다.**
+  round1은 어느 묶음에서도 2.4보다 낮아 이 검증셋은 히든 테스트보다 어렵다(순위 비교용).
 - 학습 곡선의 모양: 60 epoch쯤 3.0, 80 epoch 이후 시간당 +0.03 이하, 막바지에 train만 오르고 validation이 멈춤.
   중단 조건은 `min_delta 0.01`, `patience 25`, `min_epochs 40`, `max_epochs 150`(사용자와 합의), 끝나면 VM 정지.
 

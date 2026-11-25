@@ -118,9 +118,11 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--weights", type=Path, default=SUBMISSION_WEIGHTS)
-    ap.add_argument("--split", choices=["validation", "train", "newnoise", "all"],
+    ap.add_argument("--split", choices=["validation", "train", "newnoise", "hard", "all"],
                     default="validation",
                     help="newnoise = validation speech with unseen noise (tools/make_newnoise.py); "
+                         "hard = validation speech at low SNR, unseen noise, babble, reverb "
+                         "(tools/make_hardset.py, one line per subset); "
                          "all = train + validation, and newnoise if it has been built")
     ap.add_argument("--n", type=int, default=0, help="only the first n files (0 = all)")
     ap.add_argument("--tag", default="")

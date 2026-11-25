@@ -61,3 +61,15 @@ date,run_id,tag,split,method,n,pesq,snr_db,pesq_failed,weights,weights_sha,code_
 2026-11-25 04:41,20261125-043748_mpsenet_esc_ep100,mpsenet_esc_ep100,validation,mpsenet_esc_ep100,164,3.0225,18.012,0,weights/candidates/mpsenet_esc_ep100.pt,848e2555abcf,65021a567a42,mpsenet_esc at epoch 100 (round 1 submission weights): the last of the checkpoints kept every 25 epochs
 2026-11-25 04:41,20261125-043748_mpsenet_esc_ep100,mpsenet_esc_ep100,newnoise,noisy_input,164,1.5185,9.634,0,weights/candidates/mpsenet_esc_ep100.pt,848e2555abcf,65021a567a42,mpsenet_esc at epoch 100 (round 1 submission weights): the last of the checkpoints kept every 25 epochs
 2026-11-25 04:41,20261125-043748_mpsenet_esc_ep100,mpsenet_esc_ep100,newnoise,mpsenet_esc_ep100,164,3.0517,19.719,0,weights/candidates/mpsenet_esc_ep100.pt,848e2555abcf,65021a567a42,mpsenet_esc at epoch 100 (round 1 submission weights): the last of the checkpoints kept every 25 epochs
+2026-11-25 13:49,20261125-134743_hard_round1_ep100,hard_round1_ep100,hard,noisy_input,656,1.2056,1.539,0,weights/submission.pt,848e2555abcf,65021a567a42,
+2026-11-25 13:49,20261125-134743_hard_round1_ep100,hard_round1_ep100,hard,hard_round1_ep100,656,1.9589,10.238,0,weights/submission.pt,848e2555abcf,65021a567a42,
+2026-11-25 13:51,20261125-134925_hard_mpsenet_esc,hard_mpsenet_esc,hard,noisy_input,656,1.2056,1.539,0,weights/candidates/mpsenet_esc.pt,53a224c9fe18,65021a567a42,
+2026-11-25 13:51,20261125-134925_hard_mpsenet_esc,hard_mpsenet_esc,hard,hard_mpsenet_esc,656,1.9683,10.322,0,weights/candidates/mpsenet_esc.pt,53a224c9fe18,65021a567a42,
+2026-11-25 13:52,20261125-135106_hard_mpsenet_remix50,hard_mpsenet_remix50,hard,noisy_input,656,1.2056,1.539,0,weights/candidates/mpsenet_remix50.pt,6d8ab3dac405,65021a567a42,
+2026-11-25 13:52,20261125-135106_hard_mpsenet_remix50,hard_mpsenet_remix50,hard,hard_mpsenet_remix50,656,1.8863,9.614,0,weights/candidates/mpsenet_remix50.pt,6d8ab3dac405,65021a567a42,
+2026-11-25 13:54,20261125-135247_hard_mpsenet_dns_pretrained,hard_mpsenet_dns_pretrained,hard,noisy_input,656,1.2056,1.539,0,weights/pretrained/mpsenet_dns.pt,1bb427104177,65021a567a42,
+2026-11-25 13:54,20261125-135247_hard_mpsenet_dns_pretrained,hard_mpsenet_dns_pretrained,hard,hard_mpsenet_dns_pretrained,656,2.3079,11.208,0,weights/pretrained/mpsenet_dns.pt,1bb427104177,65021a567a42,
+2026-11-25 13:56,20261125-135428_hard_mpsenet_dns_ft,hard_mpsenet_dns_ft,hard,noisy_input,656,1.2056,1.539,0,weights/candidates/mpsenet_dns_ft.pt,b6ae00bdc0d0,65021a567a42,
+2026-11-25 13:56,20261125-135428_hard_mpsenet_dns_ft,hard_mpsenet_dns_ft,hard,hard_mpsenet_dns_ft,656,2.3224,11.850,0,weights/candidates/mpsenet_dns_ft.pt,b6ae00bdc0d0,65021a567a42,
+2026-11-25 13:57,20261125-135609_hard_mpsenet_zeroth,hard_mpsenet_zeroth,hard,noisy_input,656,1.2056,1.539,0,weights/candidates/mpsenet_zeroth.pt,bf3a4edd3cd4,65021a567a42,
+2026-11-25 13:57,20261125-135609_hard_mpsenet_zeroth,hard_mpsenet_zeroth,hard,hard_mpsenet_zeroth,656,1.7729,9.079,0,weights/candidates/mpsenet_zeroth.pt,bf3a4edd3cd4,65021a567a42,

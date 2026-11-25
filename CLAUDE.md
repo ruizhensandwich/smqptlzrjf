@@ -22,7 +22,7 @@ validation 164쌍·화자 5명, 3초, 잡음 범주 23개, SNR 0/5/10/15 dB).
 ## 환경 / 명령
 로컬(Windows): conda 환경 `se2` (Python 3.12, conda-forge pesq 0.0.4, torch 2.15.0+cpu — 배포 노트북과 같은 버전). numpy BLAS는 **OpenBLAS**로 둔다: conda-forge MKL은 LLVM OpenMP(libomp)를 불러 torch의 libiomp5md와 충돌한다(OMP Error #15, matplotlib 그림에서 발생).
 `PYTHONIOENCODING=utf-8 conda run --no-capture-output -n se2 python <script>`
-GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gcloud config get project`, 또는 RunPod): `bash setup.sh` → `source .venv/bin/activate`. 긴 학습은 `tmux` 안에서. Spot이 끊기면 `python train.py --resume runs/<id>`.
+GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gcloud config get project`, 또는 RunPod): `bash setup.sh` → `source .venv/bin/activate`. 긴 학습은 `tmux` 안에서. Spot이 끊기면 `python train.py --resume runs/<id>`. `--resume`은 run 폴더의 `config.json`만 읽는다(`--config`·`--set`과 함께 쓰면 오류). 손으로 멈춘 실행을 마무리하려면 그 `config.json`의 `max_epochs`를 끝난 epoch로 바꾸고 `--resume`.
 
 | 목적 | 명령 |
 |---|---|
@@ -105,6 +105,12 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
   말소리−바닥 잡음 간격의 화자별 중앙값이 45 dB 미만인 10명(174, 183, 189, 194, 197, 203, 204, 206, 209, 217)을 제외(사용자 결정),
   넘친 파일 340개 제외, 화자당 최대 60개 → **105명, 3초 구간 6,096개**(VM에만 있음, 558 MB). 재혼합 항목의 말소리를 이 풀로 바꾸고
   크기는 원래 항목의 clean에 맞춘다. 비율과 섞을 잡음은 사용자 결정 대기.
+- Zeroth 음성을 섞어 처음부터 학습(`configs/mpsenet_zeroth.json`, 2026-11-25, L4 4시간, **39 epoch에서 사용자 지시로 조기 중단**,
+  39 epoch 선택): 재혼합 항목의 절반(전체의 25 %)이 Zeroth 말소리. **validation 2.824 / 새 잡음 2.826 / train 2.922**.
+  다 돌린 모델과 견줄 수 없다. 같은 시점의 mpsenet_esc와 비교(35~39 epoch 평균): validation 2.805 대 2.806, 새 잡음 2.791 대 2.809,
+  train 2.821 대 2.780. **39 epoch까지는 효과가 보이지 않는다**(차이가 epoch 간 흔들림 안). 결론을 내려면 60 epoch 이상이 필요하다
+  (`runs/…_mpsenet_zeroth/last.pt`가 VM과 로컬에 있어 이어 학습 가능, 단 run의 config.json에서 max_epochs·min_epochs를 39로 바꿔 둠).
+  가중치는 `weights/candidates/mpsenet_zeroth.pt`. 사용자가 38 epoch에서 중단시켰고, 실행을 마무리하다 Claude의 실수로 1 epoch가 더 돌았다.
 - 학습 곡선의 모양: 60 epoch쯤 3.0, 80 epoch 이후 시간당 +0.03 이하, 막바지에 train만 오르고 validation이 멈춤.
   중단 조건은 `min_delta 0.01`, `patience 25`, `min_epochs 40`, `max_epochs 150`(사용자와 합의), 끝나면 VM 정지.
 

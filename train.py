@@ -128,6 +128,9 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     if args.resume:
+        if args.config or args.set or args.note:
+            ap.error("--resume continues with the run folder's config.json: --config, --set and "
+                     "--note are not read (edit that config.json to change a setting)")
         run_dir = args.resume.resolve()
         cfg = complete(json.loads((run_dir / "config.json").read_text(encoding="utf-8")))
         state = torch.load(run_dir / "last.pt", map_location="cpu", weights_only=True)

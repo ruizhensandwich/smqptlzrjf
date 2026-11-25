@@ -17,7 +17,7 @@ validation 164쌍·화자 5명, 3초, 잡음 범주 23개, SNR 0/5/10/15 dB).
 - **공개 pretrained 가중치는 제출에 써도 된다** (조교 답변, 2026-11-25. 그 전 11-23에는 미확인이라 제출에서 뺐다). 쓰면 출처·라이선스·그 가중치의 학습 데이터를 README의 "사용한 공개 코드" 표와 내역서에 적는다. 이어 학습한 가중치는 `release.py`가 README 재현 블록에 "시작 가중치"(설정의 `init_weights`와 그 파일의 `source`)를 자동으로 적고, `check_submission.py` 5c가 README에 그 파일의 출처가 있는지 본다. 받은 원본 가중치는 이 저장소 형식으로 바꿔(`tools/promote.py --state-dict`) `weights/pretrained/`에 둔다(95 MB 이하).
 - **validation은 새 화자만 잰다.** validation의 잡음 원본(NOISEX-92 14개, Nonspeech 47개)은 전부 train에도 있다(2026-11-23 확인). 새 잡음에 대한 일반화는 **새 잡음 검증셋**(`data/newnoise/`: validation clean 164개 + 같은 SNR + ESC-50 fold 5 잡음, `tools/make_newnoise.py`)으로 따로 잰다. **ESC-50 fold 5는 학습에 절대 쓰지 않는다**(외부 잡음으로 학습할 때는 fold 1~4나 다른 출처).
 - **학습은 매 epoch의 가중치를 남긴다** (`train.save_every_epoch`, 기본값 true, `runs/<id>/epoch_NNNN.pt`; 사용자 요청 2026-11-25: 87 epoch를 고르고 싶었지만 저장본이 없었다).
-- **가중치 선택은 validation PESQ 최고 epoch** (공지 권장). 대신 train 점수도 함께 기록하고, validation에만 맞춘 설정 선택이 반복되지 않게 본다(히든 테스트는 새 화자·잡음).
+- **가중치 선택은 validation PESQ 최고 epoch** (공지 권장). validation과 어려운 검증셋(`data/hard/`)을 둘 다 주요 지표로 본다(사용자 결정 2026-11-26). 히든 테스트의 화자·잡음 구성은 알려지지 않았다. 알려진 것은 "1차보다 어렵다"뿐이다(조교).
 - **AI 참고 문헌은 실재·내용을 직접 확인한 것만.** `docs/references.json`의 `checked_by`는 사람이 채운다.
 - push: 일반 커밋과 제출 태그는 Claude가 push한다(사용자 요청). 런어스 비밀글 제출은 팀장이 직접.
 
@@ -145,6 +145,6 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
 ## 작업 방식 (사용자 요청, 2026-11-22)
 - 실험은 한 번에 하나만 바꾼다.
 - 로컬 CPU에서는 pytest와 파일 몇 개짜리 확인만. 학습과 전체 채점은 GPU VM에서. CPU 추론 속도는 모델 선택 기준이 아니다.
-- 일반화가 최우선이다(히든 테스트는 새 화자·잡음). validation 0.0x 차이보다 과적합 여부를 본다.
+- 일반화가 최우선이다(히든 테스트는 1차보다 어렵다). validation 0.0x 차이보다 과적합 여부를 본다.
 - **큰 결정은 사용자가 내린다** (사용자 요청, 2026-11-24). 학습 시작, 비율·설정 변경, 새 기법·데이터 도입 전에는 "시작할까요?"만 묻지 말고, 사용자가 판단할 핵심 쟁점과 대안 1~2개(각각의 득실)와 Claude의 권고를 먼저 보여 주고 결정을 기다린다. 사용자가 질문하면 코드를 고치기 전에 왜 그렇게 돌아가는지부터 쉬운 말로 설명한다.
 - GPU VM은 Python 3.10이다. 학습을 시작하기 전에 VM에서 pytest와 `py_compile`을 돌린다.

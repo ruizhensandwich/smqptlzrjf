@@ -197,6 +197,10 @@ def check_readme(round_no: int, code_dir: Path, rep: Report):
                  "pip install -r requirements.txt", "python denoise.py"):
         if need not in readme:
             problems.append(f"README에 '{need}' 없음")
+    init = ((get_round(sub, round_no) or {}).get("weights") or {}).get("init_weights")
+    if init and (f"`{init}`" not in readme or "라이선스" not in readme):
+        problems.append(f"사전학습 가중치 {init}에서 이어 학습했는데 README에 그 파일의 출처·라이선스가 없음 "
+                        "('사용한 공개 코드' 표에 추가)")
     rep.add("5c. README: 팀명·태그·실행 명령·가중치 경로·seed·epoch·검증 점수",
             PASS if not problems else FAIL, "\n".join(problems))
     fp_code = fingerprint(code_dir)

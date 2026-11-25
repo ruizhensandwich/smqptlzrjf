@@ -3,17 +3,18 @@
 PyTorch 딥러닝 모델로 16 kHz 모노 음성의 잡음을 줄인다. 순위 = 히든 테스트셋 파일별 **PESQ-WB 평균**
 (재제출 시 검증 완료된 제출 중 최고 점수). 데이터·분할은 1차와 같다 (train 1,296쌍·화자 35명,
 validation 164쌍·화자 5명, 3초, 잡음 범주 23개, SNR 0/5/10/15 dB).
-저장소: https://github.com/ruizhensandwich/smqptlzrjf (조교가 clone해서 실행. 지금은 비공개이고 제출 직전에 공개로 전환한다). 배포 노트북:
+저장소: https://github.com/ruizhensandwich/smqptlzrjf (공개, 조교가 clone해서 실행). 배포 노트북:
 `~/Downloads/deep_learning_noise_reduction_challenge/` (MaskCNN 예제, 배포 가중치 validation 1.692).
 
 ## 절대 규칙
-- **딥러닝으로 푼다. 1차 챌린지의 전통 기법(1차 저장소 `nr/`의 OM-LSA·셸프·범주 라우팅 등)은 쓰지도 참고하지도 않는다** (사용자 결정, 2026-11-21). 1차에서 가져온 것은 제출·기록·내역서 도구뿐.
+- **PESQ를 높이는 수단은 가리지 않는다** (조교 답변, 사용자 전달 2026-11-25): 공개 pretrained 가중치, 후처리, 외부 데이터 모두 허용. 지킬 것은 제출 입출력 계약, 추론 중 다운로드 금지(가중치는 저장소 안에), 출처·라이선스 표기(README "사용한 공개 코드"·외부 데이터 표와 내역서).
+- 1차 챌린지의 전통 기법(1차 저장소 `nr/`의 OM-LSA·셸프·범주 라우팅 등)은 쓰지도 참고하지도 않는다는 사용자 결정(2026-11-21)이 있었다. 조교가 후처리를 허용했으므로 이 결정을 유지할지는 사용자에게 다시 확인한다(확인 전에는 쓰지 않는다).
 - **제출 입출력:** `input/`의 모든 WAV → `output/` **바로 아래** 같은 파일명, 16 kHz 모노, 입력과 같은 표본 수(포맷도 PCM_16 유지). 누락·추가 WAV·형식 오류·PESQ 오류 = 점수 보류. 처리 실패 시 원본 복사로라도 출력. 절대 경로 금지(`Path(__file__)` 기준).
 - **추론은 `weights/submission.pt` 하나로.** 추론 중 다운로드 금지. 가중치 파일 95 MB 이하(GitHub 100 MB 한도).
 - **런타임(denoise.py)은 noisy만 읽는다.** clean은 학습(`train.py`)과 채점(`evaluate.py`, `tools/`)에서만.
 - **공개 금지:** `data/`(수강생 녹음), 모든 음성 파일, `docs/ai_usage/`(내역서), 인증 정보(서비스 계정 키, SSH 키, 토큰, `.env`). `.gitignore` + `tools/secret_scan.py`(pre-push 훅, `git config core.hooksPath .githooks`)로 막는다.
 - **외부 공개 데이터(음성·잡음)를 학습에 쓸 수 있다** (조교 답변, 사용자 전달 2026-11-23). 학습에만 쓰고, 출처·라이선스를 README에 적고, 저장소에는 올리지 않는다.
-- **공개 pretrained 가중치는 조교 확인 전까지 제출에 쓰지 않는다.** 조교 답변은 "외부 데이터 허용"뿐이고 pretrained는 묻지 않았다(2026-11-23 사용자 확인). `weights/pretrained/`와 `weights/candidates/mpsenet_dns_ft.pt`는 실험 기록으로만 두고, 허용 답변을 받기 전에는 `weights/submission.pt`로 올리지 않는다. 허용되면 출처·라이선스·학습 데이터를 README와 내역서에 적는다.
+- **공개 pretrained 가중치는 제출에 써도 된다** (조교 답변, 2026-11-25. 그 전 11-23에는 미확인이라 제출에서 뺐다). 쓰면 출처·라이선스·그 가중치의 학습 데이터를 README의 "사용한 공개 코드" 표와 내역서에 적는다. 이어 학습한 가중치는 `release.py`가 README 재현 블록에 "시작 가중치"(설정의 `init_weights`와 그 파일의 `source`)를 자동으로 적고, `check_submission.py` 5c가 README에 그 파일의 출처가 있는지 본다. 받은 원본 가중치는 이 저장소 형식으로 바꿔(`tools/promote.py --state-dict`) `weights/pretrained/`에 둔다(95 MB 이하).
 - **validation은 새 화자만 잰다.** validation의 잡음 원본(NOISEX-92 14개, Nonspeech 47개)은 전부 train에도 있다(2026-11-23 확인). 새 잡음에 대한 일반화는 **새 잡음 검증셋**(`data/newnoise/`: validation clean 164개 + 같은 SNR + ESC-50 fold 5 잡음, `tools/make_newnoise.py`)으로 따로 잰다. **ESC-50 fold 5는 학습에 절대 쓰지 않는다**(외부 잡음으로 학습할 때는 fold 1~4나 다른 출처).
 - **학습은 매 epoch의 가중치를 남긴다** (`train.save_every_epoch`, 기본값 true, `runs/<id>/epoch_NNNN.pt`; 사용자 요청 2026-11-25: 87 epoch를 고르고 싶었지만 저장본이 없었다).
 - **가중치 선택은 validation PESQ 최고 epoch** (공지 권장). 대신 train 점수도 함께 기록하고, validation에만 맞춘 설정 선택이 반복되지 않게 본다(히든 테스트는 새 화자·잡음).
@@ -119,8 +120,11 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
   처음에는 과적합 징후(약 88 epoch부터 train PESQ만 오름) 전의 저장본인 75 epoch로 준비했다가(validation 2.969 / train 3.126 / 새 잡음 2.998,
   `mpsenet_esc_ep75.pt`), 87 epoch 저장본이 없음을 확인한 뒤 사용자가 100 epoch로 바꿨다(25 epoch마다 저장한 것 중 마지막).
   16비트 채점: **validation 3.023 / SNR 18.01 dB, train 3.197, 새 잡음 3.052**.
-  `results/submissions/round1/` 기록, README 블록 갱신, 내역서 `docs/ai_usage/round1.json` 작성까지 끝. **남은 것: `docs/references.json`의
-  `checked_by`(사람), 청취 확인(사람), 커밋 뒤 `release.py tag 1` → 저장소 공개 → `release.py push 1` → `check_submission.py --round 1`.**
+  `results/submissions/round1/` 기록, README 블록 갱신, 내역서 `docs/ai_usage/round1.json` 작성, 태그 `submission-1`(`b922a40`) push,
+  저장소 공개, `check_submission.py --round 1` READY(14개 항목 PASS, 재채점 3.0225 = 저장값)까지 끝(2026-11-25).
+  남은 것: `docs/references.json`의 `checked_by`(사람), 리더보드 공개 후 `release.py leaderboard 1 --pesq X`.
+- **2회차 후보(pretrained 허용 후):** `weights/candidates/mpsenet_dns_ft.pt`(DNS 공개 가중치에서 이어 학습) validation 3.318 / 새 잡음 3.333 / train 3.457,
+  공개 가중치 그대로 validation 3.176 / 새 잡음 3.336. 1회차(3.023 / 3.052)보다 validation +0.30, 새 잡음 +0.28.
 - 팀원의 xLSTM-SENet(과제 train만, 재혼합 50 %, 57 epoch, 사전학습 없음)을 들여와 채점(2026-11-25): validation 2.849(팀원 값 2.8493 재현),
   새 잡음 **2.586**. 같은 조건의 MP-SENet(57 epoch 2.945)보다 낮고 추론은 약 6배 느리다. mpsenet_esc와 출력 평균(7:3)은
   75 epoch 기준 validation 3.006(+0.04) / 새 잡음 2.922(−0.08), 103 epoch 기준(8:2) 3.060(+0.02) / 2.998(−0.06): **새 잡음에서 손해라 제출에 쓰지 않는다**(사용자 결정).

@@ -57,3 +57,13 @@ def test_reproduce_block_has_what_the_notice_asks(tmp_path, monkeypatch):
                  "`submission-1`", "weights/submission.pt", "python train.py --config "
                  "configs/mask_cnn_baseline.json"):
         assert need in text
+    assert "시작 가중치" not in text                  # rounds recorded before the field: no row
+
+    w = data["rounds"][0]["weights"]
+    w.update(init_weights="", init_source=None)
+    release.write_readme(data)
+    assert "무작위 초기값" in readme.read_text(encoding="utf-8")
+    w.update(init_weights="weights/pretrained/x.pt", init_source="authors' DNS checkpoint")
+    release.write_readme(data)
+    text = readme.read_text(encoding="utf-8")
+    assert "`weights/pretrained/x.pt`에서 이어 학습" in text and "authors' DNS checkpoint" in text

@@ -70,7 +70,12 @@ def weights_info() -> dict:
     t = {**cfg.get("train", {}), **{f"data.{k}": v for k, v in cfg.get("data", {}).items()}}
     if cfg.get("discriminator"):
         t["discriminator"] = cfg["discriminator"]
+    init = cfg.get("init_weights") or ""
+    init_source = None
+    if init and (ROOT / init).is_file():
+        init_source = read_checkpoint(ROOT / init)["meta"].get("source")
     return {"model": ck["model"], "model_args": ck["model_args"],
+            "init_weights": init, "init_source": init_source,
             "parameters": m.get("parameters"), "loss": m.get("loss"),
             "seed": m.get("seed"), "epochs_completed": m.get("epochs_completed"),
             "best_epoch": m.get("best_epoch"), "stop_reason": m.get("stop_reason"),
@@ -86,7 +91,11 @@ def weights_info() -> dict:
                                                      "scheduler", "lr_gamma", "discriminator",
                                                      "data.segment_seconds", "data.remix_prob",
                                                      "data.remix_snr_db", "data.gain_db",
-                                                     "data.speed_factors", "data.speed_prob")
+                                                     "data.speed_factors", "data.speed_prob",
+                                                     "data.external_noise",
+                                                     "data.external_noise_prob",
+                                                     "data.external_speech",
+                                                     "data.external_speech_prob")
                                if k in t},
             "weights_mb": round(WEIGHTS.stat().st_size / 2 ** 20, 2)}
 
@@ -127,6 +136,13 @@ def render_reproduce(data: dict) -> str:
         ("모델", f"`{w['model']}` {json.dumps(w['model_args'], ensure_ascii=False)}, "
                 f"파라미터 {w['parameters']:,}개" if w.get("parameters") else f"`{w['model']}`"),
         ("가중치 파일", f"`weights/submission.pt` ({w['weights_mb']} MB, 설정 포함)"),
+    ]
+    if w.get("init_weights"):
+        rows.append(("시작 가중치", f"`{w['init_weights']}`에서 이어 학습 (공개 사전학습 가중치, 출처: "
+                                f"{w.get('init_source') or '아래 사용한 공개 코드 표'})"))
+    elif "init_weights" in w:
+        rows.append(("시작 가중치", "무작위 초기값 (처음부터 학습, 사전학습 가중치 없음)"))
+    rows += [
         ("손실 함수", f"`{w.get('loss')}`"),
         ("seed", str(w.get("seed"))),
         ("학습 epoch", f"{w.get('epochs_completed')} epoch 실행 ({w.get('stop_reason')}), "

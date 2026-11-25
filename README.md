@@ -30,12 +30,12 @@ python denoise.py
 | 가중치 파일 | `weights/submission.pt` (8.71 MB, 설정 포함) |
 | 손실 함수 | `mpsenet` |
 | seed | 1234 |
-| 학습 epoch | 103 epoch 실행 (max_epochs), **75 epoch 가중치 선택** (팀 결정: train PESQ가 validation PESQ보다 계속 높아지기 시작한 88 epoch 이전의 저장본 중 마지막. 25 epoch마다 저장했고 103 epoch의 validation PESQ는 3.0432) |
-| 선택 가중치의 검증 점수 | 학습 중 Validation PESQ-WB 2.9690 (float 출력) · 제출 경로(16비트 WAV) 2.9691 |
+| 학습 epoch | 103 epoch 실행 (max_epochs), **100 epoch 가중치 선택** (팀 결정: 25 epoch마다 남긴 저장본 중 마지막인 100 epoch. validation과 새 잡음 점수는 85 epoch 무렵부터 거의 제자리이고 train 점수만 올랐다. 학습 중 validation PESQ 최고는 103 epoch의 3.0432) |
+| 선택 가중치의 검증 점수 | 학습 중 Validation PESQ-WB 3.0224 (float 출력) · 제출 경로(16비트 WAV) 3.0225 |
 | 학습 설정 | batch_size=4, lr=0.0005, adam_betas=[0.8, 0.99], weight_decay=0.01, max_epochs=150, min_epochs=40, patience=25, min_delta=0.01, lr_factor=0.5, lr_patience=5, min_lr=1e-05, optimizer=adamw, scheduler=exponential, lr_gamma=0.99, discriminator=metric, data.segment_seconds=2.0, data.remix_prob=0.5, data.remix_snr_db=[-5.0, 20.0], data.gain_db=[0.0, 0.0], data.speed_factors=[], data.speed_prob=0.0 |
 | 학습 명령 | `python train.py --config configs/mpsenet_esc.json` |
 | 학습 환경 | PyTorch 2.14.1+cu130, cuda |
-| 출처 | trained here: runs/20261124-030714_mpsenet_esc/epoch_0075.pt |
+| 출처 | trained here: runs/20261124-030714_mpsenet_esc/epoch_0100.pt |
 <!-- reproduce:end -->
 
 ## 제출 기록
@@ -45,7 +45,7 @@ python denoise.py
 
 | 회차 | 태그 | 커밋 | 런어스 제출일 | 모델 | Validation PESQ | Validation SNR (dB) | Train PESQ | Train SNR (dB) | 히든 테스트 PESQ |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | `submission-1` | 태그 참조 | - | MP-SENet (2.26M), 처음부터 학습: 동적 재혼합 50 % + 외부 잡음 ESC-50 fold 1~4, 75 epoch 가중치 | 2.969 | 17.85 | 3.126 | 17.88 | - |
+| 1 | `submission-1` | 태그 참조 | - | MP-SENet (2.26M), 처음부터 학습: 동적 재혼합 50 % + 외부 잡음 ESC-50 fold 1~4, 100 epoch 가중치 | 3.022 | 18.01 | 3.197 | 18.12 | - |
 
 평가할 코드 버전 = 해당 회차 **태그**가 가리키는 커밋 (`git checkout <태그>`). 점수는 `denoise.py`가 쓰는 16비트 WAV 그대로 채점한 Validation 164개·Train 1,296개 전체의 파일별 평균이며, 상세 결과는 [`results/submissions/`](results/submissions/) (train은 `roundN/train/`).
 <!-- submissions:end -->

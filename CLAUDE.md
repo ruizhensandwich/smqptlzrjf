@@ -15,6 +15,7 @@ validation 164쌍·화자 5명, 3초, 잡음 범주 23개, SNR 0/5/10/15 dB).
 - **외부 공개 데이터(음성·잡음)를 학습에 쓸 수 있다** (조교 답변, 사용자 전달 2026-11-23). 학습에만 쓰고, 출처·라이선스를 README에 적고, 저장소에는 올리지 않는다.
 - **공개 pretrained 가중치는 조교 확인 전까지 제출에 쓰지 않는다.** 조교 답변은 "외부 데이터 허용"뿐이고 pretrained는 묻지 않았다(2026-11-23 사용자 확인). `weights/pretrained/`와 `weights/candidates/mpsenet_dns_ft.pt`는 실험 기록으로만 두고, 허용 답변을 받기 전에는 `weights/submission.pt`로 올리지 않는다. 허용되면 출처·라이선스·학습 데이터를 README와 내역서에 적는다.
 - **validation은 새 화자만 잰다.** validation의 잡음 원본(NOISEX-92 14개, Nonspeech 47개)은 전부 train에도 있다(2026-11-23 확인). 새 잡음에 대한 일반화는 **새 잡음 검증셋**(`data/newnoise/`: validation clean 164개 + 같은 SNR + ESC-50 fold 5 잡음, `tools/make_newnoise.py`)으로 따로 잰다. **ESC-50 fold 5는 학습에 절대 쓰지 않는다**(외부 잡음으로 학습할 때는 fold 1~4나 다른 출처).
+- **학습은 매 epoch의 가중치를 남긴다** (`train.save_every_epoch`, 기본값 true, `runs/<id>/epoch_NNNN.pt`; 사용자 요청 2026-11-25: 87 epoch를 고르고 싶었지만 저장본이 없었다).
 - **가중치 선택은 validation PESQ 최고 epoch** (공지 권장). 대신 train 점수도 함께 기록하고, validation에만 맞춘 설정 선택이 반복되지 않게 본다(히든 테스트는 새 화자·잡음).
 - **AI 참고 문헌은 실재·내용을 직접 확인한 것만.** `docs/references.json`의 `checked_by`는 사람이 채운다.
 - push: 일반 커밋과 제출 태그는 Claude가 push한다(사용자 요청). 런어스 비밀글 제출은 팀장이 직접.
@@ -84,7 +85,7 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
   `configs/mpsenet.json` + 재혼합 50 %, 116 epoch 중 115 epoch 선택): **validation 3.132 / SNR 18.40 dB,
   train 3.303** (일반화 차 +0.094). validation 164개 전부 베이스라인보다 좋고 입력보다 나빠진 파일 0개.
   약점: 넓은 대역의 정상 잡음(hf_channel 2.35, broadband 2.45)과 0 dB(2.37).
-  가중치는 `weights/candidates/mpsenet_remix50.pt`에 보관. (`weights/submission.pt`는 2026-11-25에 mpsenet_esc 75 epoch로 바뀜, 아래 참고.)
+  가중치는 `weights/candidates/mpsenet_remix50.pt`에 보관. (`weights/submission.pt`는 2026-11-25에 mpsenet_esc 100 epoch로 바뀜, 아래 참고.)
 - 같은 설정에 말소리 속도 변환(0.9~1.1배)만 추가(`configs/mpsenet_speed.json`): validation 3.113 / train 3.284,
   일반화 차 +0.095. epoch 간 흔들림(±0.02) 안이라 **효과 없음**.
 - MP-SENet 저자 공개 가중치(DNS Challenge 학습, `weights/pretrained/mpsenet_dns.pt`, 모델 설정 `source_axes: true` 필요)를
@@ -114,9 +115,10 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
   train 2.821 대 2.780. **39 epoch까지는 효과가 보이지 않는다**(차이가 epoch 간 흔들림 안). 결론을 내려면 60 epoch 이상이 필요하다
   (`runs/…_mpsenet_zeroth/last.pt`가 VM과 로컬에 있어 이어 학습 가능, 단 run의 config.json에서 max_epochs·min_epochs를 39로 바꿔 둠).
   가중치는 `weights/candidates/mpsenet_zeroth.pt`. 사용자가 38 epoch에서 중단시켰고, 실행을 마무리하다 Claude의 실수로 1 epoch가 더 돌았다.
-- **1회차 제출 준비(2026-11-25, 사용자 결정): `weights/submission.pt` = mpsenet_esc의 75 epoch** (`weights/candidates/mpsenet_esc_ep75.pt`).
-  과적합 징후(약 88 epoch부터 train PESQ만 오름) 전의 저장본 중 마지막(25 epoch마다 저장, 87 epoch는 저장본 없음).
-  16비트 채점: **validation 2.969 / SNR 17.85 dB, train 3.126, 새 잡음 2.998** (103 epoch 대비 validation −0.074, 새 잡음 −0.057).
+- **1회차 제출 준비(2026-11-25, 사용자 결정): `weights/submission.pt` = mpsenet_esc의 100 epoch** (`weights/candidates/mpsenet_esc_ep100.pt`).
+  처음에는 과적합 징후(약 88 epoch부터 train PESQ만 오름) 전의 저장본인 75 epoch로 준비했다가(validation 2.969 / train 3.126 / 새 잡음 2.998,
+  `mpsenet_esc_ep75.pt`), 87 epoch 저장본이 없음을 확인한 뒤 사용자가 100 epoch로 바꿨다(25 epoch마다 저장한 것 중 마지막).
+  16비트 채점: **validation 3.023 / SNR 18.01 dB, train 3.197, 새 잡음 3.052**.
   `results/submissions/round1/` 기록, README 블록 갱신, 내역서 `docs/ai_usage/round1.json` 작성까지 끝. **남은 것: `docs/references.json`의
   `checked_by`(사람), 청취 확인(사람), 커밋 뒤 `release.py tag 1` → 저장소 공개 → `release.py push 1` → `check_submission.py --round 1`.**
 - 팀원의 xLSTM-SENet(과제 train만, 재혼합 50 %, 57 epoch, 사전학습 없음)을 들여와 채점(2026-11-25): validation 2.849(팀원 값 2.8493 재현),

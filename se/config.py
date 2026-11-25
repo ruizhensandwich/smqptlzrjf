@@ -32,7 +32,8 @@ TRAIN_DEFAULTS = {
     "lr_factor": 0.5,         # ReduceLROnPlateau on validation PESQ
     "lr_patience": 5,
     "min_lr": 1e-5,
-    "save_epochs": [10, 20, 40, 80],   # extra checkpoints kept for listening comparisons
+    "save_every_epoch": True,          # keep epoch_NNNN.pt of every epoch (any epoch can be chosen later)
+    "save_epochs": [10, 20, 40, 80],   # epochs kept when save_every_epoch is false
     "num_workers": 0,
     "optimizer": "adam",      # adam | adamw
     "scheduler": "plateau",   # plateau (lr_factor, lr_patience, min_lr) | exponential (lr_gamma)

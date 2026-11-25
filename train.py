@@ -14,7 +14,7 @@ dynamic remixing of the train pairs (data.*, se/data.py).
 
 Writes runs/<run_id>/ (git-ignored):
     config.json   resolved config         history.csv   one row per epoch
-    best.pt       best weights (se-ckpt)  epoch_XXXX.pt weights at train.save_epochs
+    best.pt       best weights (se-ckpt)  epoch_XXXX.pt weights of every epoch
     last.pt       state for --resume      summary.json  result and settings
 and appends one line to results/training_runs.csv (committed). Then the best
 weights are scored as submitted (evaluate.py --split all, 16-bit output) and the
@@ -265,7 +265,7 @@ def main(argv=None) -> int:
                   f"val PESQ {val_pesq:.4f} | best {best_pesq:.4f} (epoch {best_epoch}) | "
                   f"lr {lr:.2g} | {elapsed / 60:.1f} min"
                   + "".join(f" | {k} {v:.3f}" for k, v in train_stats.items()), flush=True)
-            if epoch in t["save_epochs"]:
+            if t["save_every_epoch"] or epoch in t["save_epochs"]:
                 save_checkpoint(run_dir / f"epoch_{epoch:04d}.pt", model, cfg["model"],
                                 cfg["model_args"], {**meta_base, "epoch": epoch,
                                                     "val_pesq": val_pesq})

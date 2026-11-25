@@ -4,6 +4,7 @@
     python tools/promote.py runs/<run_id> --checkpoint epoch_0040.pt
     python tools/promote.py --state-dict path/to/model.pt --config configs/X.json \
         --summary path/to/training_summary.json --source "course example weights"
+    python tools/promote.py --state-dict other.pt --model xlstm_senet --source "..." --out W.pt
 
 The second form converts a bare state_dict (e.g. the course notebook's
 best_mask_cnn.pt, or a published checkpoint that keeps it under "generator")
@@ -36,8 +37,11 @@ def main(argv=None) -> int:
     ap.add_argument("--checkpoint", default="best.pt")
     ap.add_argument("--state-dict", type=Path)
     ap.add_argument("--config", type=Path)
+    ap.add_argument("--model", help="registered model name, for a --state-dict trained elsewhere")
     ap.add_argument("--summary", type=Path, help="training summary JSON for --state-dict")
     ap.add_argument("--source", default="")
+    ap.add_argument("--selection", default="",
+                    help="why this epoch, when it is not the validation-PESQ best (shown in README)")
     ap.add_argument("--out", type=Path, default=WEIGHTS)
     args = ap.parse_args(argv)
     args.out = args.out.resolve()
@@ -53,6 +57,8 @@ def main(argv=None) -> int:
             meta.update({"epochs_completed": s["epochs_completed"], "stop_reason": s["stop_reason"],
                          "elapsed_seconds": s["elapsed_seconds"]})
         meta["source"] = args.source or f"trained here: {args.run.as_posix()}/{args.checkpoint}"
+        if meta.get("best_epoch") is None and meta.get("epoch") is not None:   # epoch_NNNN.pt
+            meta.update({"best_epoch": meta["epoch"], "best_val_pesq": meta.get("val_pesq")})
         name, model_args = ckpt["model"], ckpt["model_args"]
     elif args.state_dict and args.config:
         cfg = load_config(args.config)
@@ -70,10 +76,26 @@ def main(argv=None) -> int:
                          "stop_reason": s.get("stop_reason"),
                          "elapsed_seconds": s.get("elapsed_seconds"),
                          "torch": s.get("torch_version"), "device": s.get("device")})
+    elif args.state_dict and args.model:
+        # a checkpoint trained outside this repository: {"model": state_dict, "config": {...},
+        # "epoch": n, "val_pesq_wb": x} (or a bare state_dict); model arguments are the defaults
+        name, model_args = args.model, {}
+        model = build_model(name, model_args)
+        data = torch.load(args.state_dict, map_location="cpu", weights_only=True)
+        state = data["model"] if isinstance(data.get("model"), dict) else data
+        if hasattr(model, "net") and not any(k.startswith("net.") for k in state):
+            state = {f"net.{k}": v for k, v in state.items()}      # wrapper around the source net
+        model.load_state_dict(state)
+        meta = {"source": args.source, "best_epoch": data.get("epoch"),
+                "best_val_pesq": data.get("val_pesq_wb"),
+                "seed": (data.get("config") or {}).get("seed"),
+                "training_config": data.get("config")}
     else:
-        sys.exit("give runs/<run_id>, or --state-dict with --config")
+        sys.exit("give runs/<run_id>, or --state-dict with --config or --model")
 
     meta["parameters"] = count_parameters(model)
+    if args.selection:
+        meta["selection"] = args.selection
     save_checkpoint(args.out, model, name, model_args, meta)
     mb = args.out.stat().st_size / 2 ** 20
     print(f"{args.out.relative_to(ROOT).as_posix()}: {name}, {meta['parameters']:,} params, "

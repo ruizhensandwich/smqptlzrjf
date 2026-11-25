@@ -77,7 +77,8 @@ def weights_info() -> dict:
             "best_val_pesq_training": m.get("best_val_pesq"),
             "config_path": m.get("config_path"), "overrides": m.get("overrides") or [],
             "run_id": m.get("run_id"), "device": m.get("device"), "torch": m.get("torch"),
-            "source": m.get("source"),
+            "source": m.get("source"), "members": m.get("members"),
+            "selection": m.get("selection"),
             "train_settings": {k: t.get(k) for k in ("batch_size", "lr", "adam_betas",
                                                      "weight_decay", "max_epochs", "min_epochs",
                                                      "patience", "min_delta", "lr_factor",
@@ -119,6 +120,8 @@ def render_reproduce(data: dict) -> str:
         + "".join(f" --set {s}" for s in w.get("overrides") or [])
     ts = w.get("train_settings") or {}
     settings = ", ".join(f"{k}={v}" for k, v in ts.items()) or "-"
+    if w.get("members"):
+        return render_ensemble(r, w, v)
     rows = [
         ("제출 회차", f"{r['round']}회차 (`{r['tag']}`)"),
         ("모델", f"`{w['model']}` {json.dumps(w['model_args'], ensure_ascii=False)}, "
@@ -127,7 +130,8 @@ def render_reproduce(data: dict) -> str:
         ("손실 함수", f"`{w.get('loss')}`"),
         ("seed", str(w.get("seed"))),
         ("학습 epoch", f"{w.get('epochs_completed')} epoch 실행 ({w.get('stop_reason')}), "
-                     f"**{w.get('best_epoch')} epoch 가중치 선택** (Validation PESQ 최고)"),
+                     f"**{w.get('best_epoch')} epoch 가중치 선택** "
+                     f"({w.get('selection') or 'Validation PESQ 최고'})"),
         ("선택 가중치의 검증 점수", f"학습 중 Validation PESQ-WB {w.get('best_val_pesq_training'):.4f} "
                              f"(float 출력) · 제출 경로(16비트 WAV) {v.get('pesq', float('nan')):.4f}"
          if w.get("best_val_pesq_training") is not None else f"{v.get('pesq')}"),
@@ -136,6 +140,33 @@ def render_reproduce(data: dict) -> str:
         ("학습 환경", f"PyTorch {w.get('torch')}, {w.get('device')}"),
         ("출처", w.get("source") or w.get("run_id") or "-"),
     ]
+    return "\n".join(["| 항목 | 값 |", "|---|---|"] + [f"| {a} | {b} |" for a, b in rows])
+
+
+def render_ensemble(r: dict, w: dict, v: dict) -> str:
+    """Reproduction block of a weight file that holds several models (tools/make_ensemble.py)."""
+    rows = [
+        ("제출 회차", f"{r['round']}회차 (`{r['tag']}`)"),
+        ("모델", f"`ensemble`: 아래 {len(w['members'])}개 모델이 같은 입력을 각각 처리하고, 출력 파형을 "
+                f"고정 비율로 평균합니다 (모든 파일에 같은 비율). 파라미터 합계 {w['parameters']:,}개"),
+        ("가중치 파일", f"`weights/submission.pt` ({w['weights_mb']} MB, 모든 모델의 가중치와 설정 포함)"),
+        ("검증 점수", f"제출 경로(16비트 WAV) Validation PESQ-WB {v.get('pesq', float('nan')):.4f}"),
+        ("만드는 명령", "`python tools/make_ensemble.py --members "
+                    + " ".join(m["file"] for m in w["members"]) + " --weights "
+                    + " ".join(f"{m['weight']:g}" for m in w["members"])
+                    + " --out weights/candidates/E.pt` → `python tools/promote.py weights/candidates "
+                      "--checkpoint E.pt`"),
+    ]
+    for i, m in enumerate(w["members"], 1):
+        epochs = f"{m.get('epochs_completed')} epoch 실행, " if m.get("epochs_completed") else ""
+        score = (f", 학습 중 Validation PESQ-WB {m['best_val_pesq']:.4f}"
+                 if m.get("best_val_pesq") is not None else "")
+        command = (f" · 학습 명령 `python train.py --config {m['config_path']}`"
+                   if m.get("config_path") else "")
+        rows.append((f"모델 {i} (비율 {m['weight']:g})",
+                     f"`{m['model']}` · `{m['file']}` · 파라미터 {m.get('parameters'):,}개 · "
+                     f"seed {m.get('seed')} · {epochs}**{m.get('best_epoch')} epoch 가중치**{score}"
+                     f"{command} · {m.get('source') or m.get('run_id') or '-'}"))
     return "\n".join(["| 항목 | 값 |", "|---|---|"] + [f"| {a} | {b} |" for a, b in rows])
 
 

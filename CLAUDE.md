@@ -37,6 +37,8 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
 | 모델 비교표 (모든 모델의 PESQ·장단점) | `python tools/model_board.py` → `results/model_board.md` |
 | 스펙트로그램·청취 비교 | `python tools/spectrogram.py --models runs/<A> runs/<B> [--pick diverse\|worst\|best --n 4]` / `<segment_id> ...` / `--noisy any.wav [--clean ref.wav]` → `results/listening/<time>/index.html` (학생 녹음 포함: git 제외·공개 금지) |
 | 두 실행 비교 | `python compare.py <runA> <runB> [--split train]` |
+| 여러 모델을 한 가중치 파일로 (출력 파형의 고정 비율 평균) | `python tools/make_ensemble.py --members A.pt B.pt --weights 0.7 0.3 --out weights/candidates/E.pt` (모델 `ensemble`, 비율은 validation으로 큰 단위만 고른다) |
+| 다른 곳에서 학습한 가중치 들여오기 | `python tools/promote.py --state-dict X.pt --model xlstm_senet --source "..." --out weights/candidates/Y.pt` |
 | 제출 가중치 지정 | `python tools/promote.py runs/<run_id>` → `weights/submission.pt` |
 | 공개 전 보안 검사 | `python tools/secret_scan.py` |
 | N회차 제출 결과 | `python evaluate.py --round N` → `results/submissions/roundN/` (+ `train/`) |
@@ -48,6 +50,7 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
 ## 구조
 - `se/`: `models.py`(MODELS 레지스트리, 모델은 `enhance(noisy[B,T]) -> [B,T]`), `losses.py`(LOSSES, `loss(model, noisy, clean)`), `config.py`(기본값 = 배포 노트북, 모르는 키는 오류), `data.py`(DATA_ROOT 또는 `data/`, 파형 캐시), `checkpoint.py`(가중치+모델 설정+학습 정보를 한 파일에), `inference.py`(denoise와 evaluate가 공유, 16비트로 쓰고 다시 읽은 값으로 채점), `metrics.py`.
 - `se/arch/`: 공개 코드에서 이식한 모델(파일 하나에 모델 하나, 첫머리에 출처·라이선스·바꾼 점). `se/trainers.py`: 한 epoch 학습(`Trainer` = 손실 하나, `MetricGANTrainer` = PESQ 예측 판별기 포함). 설정의 `discriminator`·`data.*`(구간 자르기, 동적 재혼합)·`train.optimizer/scheduler`로 고른다. 기본값은 배포 노트북 그대로.
+- `se/arch/xlstm_senet/`: xLSTM-SENet(공개 코드 그대로 + `__init__.py`의 `enhance()` 래퍼, `einops` 필요). 이 저장소에서는 추론만 한다(학습은 팀원의 별도 하네스에서 했고 그 학습 코드는 이 저장소에 없다). `se/models.py`의 `ensemble`은 여러 모델을 한 파일에 담아 출력을 평균한다.
 - 새 모델: `se/arch/<이름>.py` → `se/models.py`의 MODELS에 한 줄(손실이 새로 필요하면 `se/losses.py`) → `configs/<이름>.json` → train → evaluate. MP-SENet 계열(analysis/forward/synthesis 인터페이스)은 손실 `mpsenet`과 판별기를 그대로 쓴다.
 - 동적 재혼합(`se/data.py` `RemixedSpeech`): train 쌍의 잡음(noisy − clean)을 다른 train 발화에 무작위 SNR로 섞는다. train 데이터만, 메모리에서만. 재료 기준은 `REMIX_LIMITS`(2026-11-22 확인: 1,296개 모두 지연 0·SNR 오차 0.002 dB 이내, 잡음이 대부분 무음인 6개만 제외).
 - `train.py`는 `data/newnoise/`가 있으면 매 epoch 새 잡음 PESQ도 재서 `history.csv`의 `newnoise_pesq`에 적는다. 보기만 하고, 가중치 선택은 여전히 validation PESQ.
@@ -74,14 +77,14 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
 
 ## 현재 기록
 - 배포 예제 MaskCNN(seed 42, 109 epoch 중 89 epoch 선택): validation 1.692 (노트북 float 채점).
-- 이 저장소의 `train.py`로 CPU 재현(2026-11-21, `runs/20261121-175901_baseline_repro`, 9.8분): 109 epoch 모두 손실·PESQ 차이 0, 선택 가중치가 배포 가중치와 비트 단위로 같음. 현재 `weights/submission.pt`.
+- 이 저장소의 `train.py`로 CPU 재현(2026-11-21, `runs/20261121-175901_baseline_repro`, 9.8분): 109 epoch 모두 손실·PESQ 차이 0, 선택 가중치가 배포 가중치와 비트 단위로 같음(2026-11-25까지 `weights/submission.pt`였음).
   16비트 출력 채점: **validation 1.6922 / SNR 13.06 dB, train 1.8776 / 13.11 dB** (입력 1.395 / 1.470). train 개선 +0.41 대 validation +0.30.
   약점(스펙트로그램): 저역 잡음(바람·차량 실내)을 지울 때 300 Hz 아래 말소리 배음까지 지운다 — validation에서 가장 손해 본 3개 파일(traffic 15 dB −0.61, wind 15 dB −0.56, volvo 5 dB −0.45)이 모두 이 경우.
 - MP-SENet(`se/arch/mpsenet.py`, 2.26M, 크기는 마스킹·위상은 매핑)을 처음부터 학습(2026-11-22, GCP L4 11시간,
   `configs/mpsenet.json` + 재혼합 50 %, 116 epoch 중 115 epoch 선택): **validation 3.132 / SNR 18.40 dB,
   train 3.303** (일반화 차 +0.094). validation 164개 전부 베이스라인보다 좋고 입력보다 나빠진 파일 0개.
   약점: 넓은 대역의 정상 잡음(hf_channel 2.35, broadband 2.45)과 0 dB(2.37).
-  가중치는 `weights/candidates/mpsenet_remix50.pt`에 보관. **`weights/submission.pt`는 아직 베이스라인**(1회차 미제출).
+  가중치는 `weights/candidates/mpsenet_remix50.pt`에 보관. (`weights/submission.pt`는 2026-11-25에 mpsenet_esc 75 epoch로 바뀜, 아래 참고.)
 - 같은 설정에 말소리 속도 변환(0.9~1.1배)만 추가(`configs/mpsenet_speed.json`): validation 3.113 / train 3.284,
   일반화 차 +0.095. epoch 간 흔들림(±0.02) 안이라 **효과 없음**.
 - MP-SENet 저자 공개 가중치(DNS Challenge 학습, `weights/pretrained/mpsenet_dns.pt`, 모델 설정 `source_axes: true` 필요)를
@@ -111,6 +114,15 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
   train 2.821 대 2.780. **39 epoch까지는 효과가 보이지 않는다**(차이가 epoch 간 흔들림 안). 결론을 내려면 60 epoch 이상이 필요하다
   (`runs/…_mpsenet_zeroth/last.pt`가 VM과 로컬에 있어 이어 학습 가능, 단 run의 config.json에서 max_epochs·min_epochs를 39로 바꿔 둠).
   가중치는 `weights/candidates/mpsenet_zeroth.pt`. 사용자가 38 epoch에서 중단시켰고, 실행을 마무리하다 Claude의 실수로 1 epoch가 더 돌았다.
+- **1회차 제출 준비(2026-11-25, 사용자 결정): `weights/submission.pt` = mpsenet_esc의 75 epoch** (`weights/candidates/mpsenet_esc_ep75.pt`).
+  과적합 징후(약 88 epoch부터 train PESQ만 오름) 전의 저장본 중 마지막(25 epoch마다 저장, 87 epoch는 저장본 없음).
+  16비트 채점: **validation 2.969 / SNR 17.85 dB, train 3.126, 새 잡음 2.998** (103 epoch 대비 validation −0.074, 새 잡음 −0.057).
+  `results/submissions/round1/` 기록, README 블록 갱신, 내역서 `docs/ai_usage/round1.json` 작성까지 끝. **남은 것: `docs/references.json`의
+  `checked_by`(사람), 청취 확인(사람), 커밋 뒤 `release.py tag 1` → 저장소 공개 → `release.py push 1` → `check_submission.py --round 1`.**
+- 팀원의 xLSTM-SENet(과제 train만, 재혼합 50 %, 57 epoch, 사전학습 없음)을 들여와 채점(2026-11-25): validation 2.849(팀원 값 2.8493 재현),
+  새 잡음 **2.586**. 같은 조건의 MP-SENet(57 epoch 2.945)보다 낮고 추론은 약 6배 느리다. mpsenet_esc와 출력 평균(7:3)은
+  75 epoch 기준 validation 3.006(+0.04) / 새 잡음 2.922(−0.08), 103 epoch 기준(8:2) 3.060(+0.02) / 2.998(−0.06): **새 잡음에서 손해라 제출에 쓰지 않는다**(사용자 결정).
+  가중치 `weights/candidates/xlstm_ep57.pt`는 기록용(평균 파일은 `tools/make_ensemble.py`로 다시 만든다).
 - 학습 곡선의 모양: 60 epoch쯤 3.0, 80 epoch 이후 시간당 +0.03 이하, 막바지에 train만 오르고 validation이 멈춤.
   중단 조건은 `min_delta 0.01`, `patience 25`, `min_epochs 40`, `max_epochs 150`(사용자와 합의), 끝나면 VM 정지.
 

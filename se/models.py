@@ -59,9 +59,44 @@ class MaskCNN(nn.Module):
                            window=self.window, length=noisy.shape[-1])
 
 
+class Ensemble(nn.Module):
+    """Several models in one weight file; the output is the weighted mean of their outputs.
+
+    members: [{"model": name, "model_args": {...}, "weight": w}, ...]. The weights are
+    fixed numbers stored in the checkpoint's model_args (the same for every input file) and
+    are used as given divided by their sum. Each member runs on the input on its own,
+    exactly as it would alone.
+    """
+
+    def __init__(self, members: list[dict]):
+        super().__init__()
+        if len(members) < 2 or any(m["model"] == "ensemble" or float(m["weight"]) <= 0
+                                   for m in members):
+            raise ValueError("an ensemble needs two or more members that are not ensembles, "
+                             "each with a weight > 0")
+        self.members = nn.ModuleList(build_model(m["model"], m.get("model_args"))
+                                     for m in members)
+        total = sum(float(m["weight"]) for m in members)
+        self.weights = [float(m["weight"]) / total for m in members]
+
+    def enhance(self, noisy: torch.Tensor) -> torch.Tensor:
+        out = None
+        for w, member in zip(self.weights, self.members):
+            y = w * member.enhance(noisy)
+            out = y if out is None else out + y
+        return out
+
+
+def _xlstm_senet(**model_args) -> nn.Module:
+    from se.arch.xlstm_senet import XLSTMSENet      # imported on use: needs the einops package
+    return XLSTMSENet(**model_args)
+
+
 MODELS: dict[str, type[nn.Module]] = {
     "mask_cnn": MaskCNN,
     "mpsenet": MPSENet,          # se/arch/mpsenet.py (MP-SENet, MIT License)
+    "xlstm_senet": _xlstm_senet,  # se/arch/xlstm_senet/ (xLSTM-SENet, MIT License)
+    "ensemble": Ensemble,        # weighted mean of member models (tools/make_ensemble.py)
 }
 
 

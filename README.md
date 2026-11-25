@@ -23,7 +23,19 @@ python denoise.py
 ## 제출 가중치의 학습 정보
 
 <!-- reproduce:start -->
-_아직 제출 기록이 없습니다._
+| 항목 | 값 |
+|---|---|
+| 제출 회차 | 1회차 (`submission-1`) |
+| 모델 | `mpsenet` {"n_fft": 400, "hop": 100, "win": 400, "dense_channel": 64, "num_tsblocks": 4, "n_heads": 4, "beta": 2.0, "compress_factor": 0.3}, 파라미터 2,263,372개 |
+| 가중치 파일 | `weights/submission.pt` (8.71 MB, 설정 포함) |
+| 손실 함수 | `mpsenet` |
+| seed | 1234 |
+| 학습 epoch | 103 epoch 실행 (max_epochs), **75 epoch 가중치 선택** (팀 결정: train PESQ가 validation PESQ보다 계속 높아지기 시작한 88 epoch 이전의 저장본 중 마지막. 25 epoch마다 저장했고 103 epoch의 validation PESQ는 3.0432) |
+| 선택 가중치의 검증 점수 | 학습 중 Validation PESQ-WB 2.9690 (float 출력) · 제출 경로(16비트 WAV) 2.9691 |
+| 학습 설정 | batch_size=4, lr=0.0005, adam_betas=[0.8, 0.99], weight_decay=0.01, max_epochs=150, min_epochs=40, patience=25, min_delta=0.01, lr_factor=0.5, lr_patience=5, min_lr=1e-05, optimizer=adamw, scheduler=exponential, lr_gamma=0.99, discriminator=metric, data.segment_seconds=2.0, data.remix_prob=0.5, data.remix_snr_db=[-5.0, 20.0], data.gain_db=[0.0, 0.0], data.speed_factors=[], data.speed_prob=0.0 |
+| 학습 명령 | `python train.py --config configs/mpsenet_esc.json` |
+| 학습 환경 | PyTorch 2.14.1+cu130, cuda |
+| 출처 | trained here: runs/20261124-030714_mpsenet_esc/epoch_0075.pt |
 <!-- reproduce:end -->
 
 ## 제출 기록
@@ -33,8 +45,9 @@ _아직 제출 기록이 없습니다._
 
 | 회차 | 태그 | 커밋 | 런어스 제출일 | 모델 | Validation PESQ | Validation SNR (dB) | Train PESQ | Train SNR (dB) | 히든 테스트 PESQ |
 |---|---|---|---|---|---|---|---|---|---|
+| 1 | `submission-1` | 태그 참조 | - | MP-SENet (2.26M), 처음부터 학습: 동적 재혼합 50 % + 외부 잡음 ESC-50 fold 1~4, 75 epoch 가중치 | 2.969 | 17.85 | 3.126 | 17.88 | - |
 
-평가할 코드 버전 = 해당 회차 **태그**가 가리키는 커밋 (`git checkout <태그>`).
+평가할 코드 버전 = 해당 회차 **태그**가 가리키는 커밋 (`git checkout <태그>`). 점수는 `denoise.py`가 쓰는 16비트 WAV 그대로 채점한 Validation 164개·Train 1,296개 전체의 파일별 평균이며, 상세 결과는 [`results/submissions/`](results/submissions/) (train은 `roundN/train/`).
 <!-- submissions:end -->
 
 ## 학습과 평가 (재현)
@@ -65,6 +78,7 @@ python train.py --resume runs/<run_id>                          # 중단된 학�
 |---|---|---|---|
 | `se/arch/mpsenet.py`, `se/arch/metric_discriminator.py`, `se/losses.py`의 `mpsenet`, `se/trainers.py`의 `MetricGANTrainer` | [yxlu-0102/MP-SENet](https://github.com/yxlu-0102/MP-SENet) (Lu, Ai, Ling, Interspeech 2023) | MIT | 모델·판별기·손실·학습 순서를 이식. 공개된 학습 가중치는 쓰지 않고 이 과제의 train 데이터로 처음부터 학습. 바꾼 점은 각 파일 첫머리에 기록 |
 | `weights/pretrained/mpsenet_dns.pt` | 같은 저장소의 `best_ckpt/g_best_dns` (저자 공개 가중치, DNS Challenge 데이터로 학습) | MIT (`weights/pretrained/LICENSE.MP-SENet`) | 가중치 값은 그대로 두고 이 저장소의 파일 형식으로만 변환(`tools/promote.py --state-dict`). 이어 학습의 출발점(`configs/mpsenet_pretrained_dns.json`의 `init_weights`)으로 쓴다. 이 가중치는 원본 코드의 축 순서로 학습됐으므로 모델 설정 `source_axes: true`가 필요하다 |
+| `se/arch/xlstm_senet/` (`generator.py`, `codec_module.py`, `xlstm_block.py`, `vision_lstm.py`, `vision_lstm_util.py`, `lsigmoid.py`, `stfts.py`, `mamba_init.py`) | [NikolaiKyhne/xLSTM-SENet](https://github.com/NikolaiKyhne/xLSTM-SENet) 커밋 `e195b64` (Kühne, Østergaard, Jensen, Tan, Interspeech 2025). `mamba_init.py`는 같은 저장소에 들어 있는 mamba_ssm의 `_init_weights` | MIT (`se/arch/xlstm_senet/LICENSE`), `mamba_init.py`는 Apache-2.0 (`LICENSE_mamba`) | 모델 코드를 그대로 두고(import 한 줄만 수정) `__init__.py`에서 이 저장소의 `enhance()` 인터페이스로 감쌌다. 공개된 학습 가중치는 쓰지 않았다. 가중치 `weights/candidates/xlstm_ep57.pt`는 팀원이 과제 train 데이터만으로 무작위 초기값에서 학습한 것(57 epoch, 재혼합 50 %, 외부 데이터 없음)을 `tools/promote.py --state-dict … --model xlstm_senet`으로 형식만 바꾼 것이다 |
 
 외부 데이터 (저장소에 올리지 않음, 받는 방법은 각 도구의 `--fetch`)
 

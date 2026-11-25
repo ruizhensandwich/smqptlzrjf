@@ -28,7 +28,7 @@ PY="${PYTHON:-python3}"
 . .venv/bin/activate
 python -m pip install -q -U pip wheel setuptools
 python -m pip install -q torch                 # Linux wheels on PyPI include CUDA
-python -m pip install -q "numpy>=1.26,<3" "scipy>=1.12,<2" "soundfile>=0.12,<1" \
+python -m pip install -q "numpy>=1.26,<3" "scipy>=1.12,<2" "soundfile>=0.12,<1" "einops>=0.7,<1" \
   "pandas>=2.1,<4" "pytest>=8" "matplotlib>=3.8" Cython
 python -m pip install -q --no-build-isolation pesq==0.0.4   # C extension built against this numpy
 

@@ -166,7 +166,9 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
   그대로 채점 validation 3.135 / 새 잡음 3.273 / train 2.946 / 어려운 검증셋 2.314(lowsnr 2.20, newlow 2.47, babble 2.80, **reverb 1.79 = 전 모델 최고**).
 - **출력 평균 섞기**(2026-11-26, 비율은 TF-Locoformer / DNS 이어 학습 / MossFormerGAN / MP-SENet DNS): 단독 최고 TF-Locoformer 3.297 / 3.424 / 2.463.
   0.7/0.3/0/0 = 3.437 / 3.532 / 2.514, **0.6/0.2/0.2/0 = 3.435 / 3.545 / 2.534**(reverb 1.69), 0.6/0.2/0/0.2 = 3.440 / 3.551 / 2.530.
-  셋 이상 섞기는 둘보다 +0.01~0.02(흔들림 수준). TF-Locoformer 가중치는 다른 세션이 팀원 v8 패키지에서 꺼낸 것으로, 공식 저장소와 같은지 확인 필요.
+  셋 이상 섞기는 둘보다 +0.01~0.02(흔들림 수준). TF-Locoformer 가중치(`weights/candidates/tflocoformer_v8.pt`, 팀원 v8 패키지에서 꺼냄)는 **MERL 공식 공개 가중치와 같다**(2026-11-26 확인):
+  merlresearch/tf-locoformer(Apache-2.0)의 `egs2/dns_ins20/enh1/exp/enh_train_enh_tflocoformer_raw/valid.loss.ave_5best.pth`(Git LFS, 59,972,116 B, sha256 6ffa518f…)를 받아 비교, 텐서 174개(14.97M 파라미터) 모두 비트 단위로 같음.
+  학습 데이터는 DNS Challenge (Interspeech 2020). 파일 안 `source` 문구는 아직 "확인 전"이라 고쳐야 한다.
 - **형식 점검**(`tools/format_check.py`, `--n 0`은 VM에서): 음량(30 dB 작게, 최대), 직류 성분, 12·30초 이어 붙이기는 영향 없음(TF-Locoformer만 30초 −0.05).
   **앞뒤 무음은 크게 손해**: MP-SENet DNS 0.25초 −0.34, 1초 −0.54, 3초 −1.01, TF-Locoformer 1초 −0.34, MossFormerGAN 1초 −0.09. −70 dBFS 잡음을 붙여도 비슷.
   그 파일의 실제 잡음을 앞뒤에 붙이면 영향 없음. 과제 noisy 1,460개에는 조용한 시작 구간이 하나도 없다(가장 조용한 20 ms 중앙값 −37 dB).

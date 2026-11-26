@@ -16,6 +16,39 @@ from se import SAMPLE_RATE
 
 FULL_SCALE = 1.0 - 2.0 ** -15
 
+# Quiet-edge guard (user decision 2026-11-26). The models lose 0.1-1.0 PESQ when digital
+# silence or near-silence (e.g. -70 dBFS hiss) sits before or after the speech
+# (tools/format_check.py), while the same length of the file's own noise costs nothing.
+# A leading or trailing run of 20 ms frames quieter than EDGE_DB that lasts at least
+# EDGE_MIN_SECONDS is cut off before enhancement and written as zeros. No course noisy
+# file (train 1,296, validation 164) has such a run (the longest below -55 dBFS is 0.06 s),
+# so on course-like files the guard does nothing and the output is bit-identical.
+EDGE_FRAME = 320                # 20 ms at 16 kHz
+EDGE_DB = -55.0                 # frame RMS in dBFS
+EDGE_MIN_SECONDS = 0.1
+EDGE_MIN_KEEP_SECONDS = 0.25    # if less than this would be left, enhance the whole file
+
+
+def quiet_edges(x: np.ndarray, sr: int = SAMPLE_RATE) -> tuple[int, int]:
+    """(start, stop) of the part to enhance; (0, len(x)) when there are no quiet edges."""
+    n = x.size
+    frames = n // EDGE_FRAME
+    if frames == 0:
+        return 0, n
+    f = x[:frames * EDGE_FRAME].reshape(frames, EDGE_FRAME)
+    loud = 10 * np.log10(np.mean(f ** 2, axis=1) + 1e-20) >= EDGE_DB
+    if not loud.any():
+        return 0, n
+    min_run = int(np.ceil(EDGE_MIN_SECONDS * sr / EDGE_FRAME))
+    head = int(np.argmax(loud))
+    tail = int(np.argmax(loud[::-1]))
+    start = head * EDGE_FRAME if head >= min_run else 0
+    # the remainder after the last whole frame counts as part of the tail run
+    stop = (frames - tail) * EDGE_FRAME if tail >= min_run else n
+    if stop - start < EDGE_MIN_KEEP_SECONDS * sr:
+        return 0, n
+    return start, stop
+
 
 def pick_device(name: str = "auto") -> torch.device:
     if name == "auto":
@@ -28,13 +61,18 @@ def enhance(model, x: np.ndarray, sr: int, device: torch.device) -> np.ndarray:
     """One channel, any length -> enhanced float64 of the same length.
 
     Inputs at another rate are resampled to 16 kHz and back (the challenge
-    input is 16 kHz, so this is only a safety net).
+    input is 16 kHz, so this is only a safety net). Quiet edges (see quiet_edges)
+    are not enhanced and come out as zeros.
     """
     x = np.asarray(x, dtype=np.float64)
     n = x.size
     y16 = resample_poly(x, SAMPLE_RATE, sr) if sr != SAMPLE_RATE else x
-    wave = torch.from_numpy(y16.astype(np.float32)).unsqueeze(0).to(device)
+    a, b = quiet_edges(y16)
+    wave = torch.from_numpy(y16[a:b].astype(np.float32)).unsqueeze(0).to(device)
     y = model.enhance(wave)[0].double().cpu().numpy()
+    if (a, b) != (0, y16.size):
+        mid = y[:b - a] if y.size >= b - a else np.pad(y, (0, b - a - y.size))
+        y = np.concatenate([np.zeros(a), mid, np.zeros(y16.size - b)])
     if sr != SAMPLE_RATE:
         y = resample_poly(y, sr, SAMPLE_RATE)
     y = y[:n] if y.size >= n else np.pad(y, (0, n - y.size))

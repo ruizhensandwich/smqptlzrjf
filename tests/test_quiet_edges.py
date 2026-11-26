@@ -45,6 +45,13 @@ def test_silent_and_hiss_edges_are_cut():
     assert np.allclose(y[a:b], alone)
 
 
+def test_quiet_recording_is_not_cut():
+    x = noisy() * 10 ** (-40 / 20)                  # -66 dBFS throughout: quiet, but no silent edges
+    assert quiet_edges(x) == (0, x.size)
+    x = np.concatenate([np.zeros(SR), x])           # true silence before it is still cut
+    assert quiet_edges(x) == (SR, x.size)
+
+
 def test_all_quiet_or_too_little_left():
     assert quiet_edges(np.zeros(SR * 2)) == (0, SR * 2)
     x = np.zeros(SR * 2)

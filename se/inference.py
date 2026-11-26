@@ -19,12 +19,15 @@ FULL_SCALE = 1.0 - 2.0 ** -15
 # Quiet-edge guard (user decision 2026-11-26). The models lose 0.1-1.0 PESQ when digital
 # silence or near-silence (e.g. -70 dBFS hiss) sits before or after the speech
 # (tools/format_check.py), while the same length of the file's own noise costs nothing.
-# A leading or trailing run of 20 ms frames quieter than EDGE_DB that lasts at least
-# EDGE_MIN_SECONDS is cut off before enhancement and written as zeros. No course noisy
-# file (train 1,296, validation 164) has such a run (the longest below -55 dBFS is 0.06 s),
-# so on course-like files the guard does nothing and the output is bit-identical.
+# A leading or trailing run of 20 ms frames more than EDGE_GAP_DB quieter than the file's
+# own loud level (90th percentile of its frame levels) that lasts at least EDGE_MIN_SECONDS
+# is cut off before enhancement and written as zeros. The threshold is relative so that a
+# quietly recorded file is treated like a loud one (an absolute -55 dBFS threshold cut the
+# real edges of files 30 dB quieter than the course files, -0.17 PESQ). In the course noisy
+# files (train 1,296, validation 164) the edges are at most 25 dB below that level and no
+# file has a qualifying run, so on course-like files the guard does nothing (bit-identical).
 EDGE_FRAME = 320                # 20 ms at 16 kHz
-EDGE_DB = -55.0                 # frame RMS in dBFS
+EDGE_GAP_DB = 40.0              # below the file's 90th-percentile frame level
 EDGE_MIN_SECONDS = 0.1
 EDGE_MIN_KEEP_SECONDS = 0.25    # if less than this would be left, enhance the whole file
 
@@ -36,9 +39,8 @@ def quiet_edges(x: np.ndarray, sr: int = SAMPLE_RATE) -> tuple[int, int]:
     if frames == 0:
         return 0, n
     f = x[:frames * EDGE_FRAME].reshape(frames, EDGE_FRAME)
-    loud = 10 * np.log10(np.mean(f ** 2, axis=1) + 1e-20) >= EDGE_DB
-    if not loud.any():
-        return 0, n
+    db = 10 * np.log10(np.mean(f ** 2, axis=1) + 1e-20)
+    loud = db >= np.percentile(db, 90) - EDGE_GAP_DB
     min_run = int(np.ceil(EDGE_MIN_SECONDS * sr / EDGE_FRAME))
     head = int(np.argmax(loud))
     tail = int(np.argmax(loud[::-1]))

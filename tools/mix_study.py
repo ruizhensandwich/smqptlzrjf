@@ -354,15 +354,9 @@ def cmd_report(args) -> None:
 # STFT (201 bins): the PCS400 table of https://github.com/RoyChao19477/SEMamba (models/pcs400.py,
 # commit 750ff5d, MIT). The source computes  |X| -> expm1(w * log1p(|X|))  on a Hamming-window
 # STFT of the waveform as it is and then sets the peak of the result to 1.
-PCS400 = np.ones(201)
-PCS400[3:5] = 1.070175439
-PCS400[5:8] = 1.182456140
-PCS400[8:10] = 1.287719298
-PCS400[10:110] = 1.4
-PCS400[110:130] = 1.322807018
-PCS400[130:160] = 1.238596491
-PCS400[160:190] = 1.161403509
-PCS400[190:201] = 1.077192982
+from se.pcs import PCS400 as _PCS400  # noqa: E402 - the table lives in se/pcs.py (used by the submission)
+
+PCS400 = _PCS400.numpy()
 PCS_PEAK = 1.0          # with norm = "peak": level at which PCS is applied (log1p depends on the level)
 PCS_EPS = 1e-8
 

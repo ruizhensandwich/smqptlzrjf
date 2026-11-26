@@ -5,3 +5,7 @@ torch==2.15.0
 numpy==2.5.5
 scipy==1.18.1
 soundfile==0.14.0
+# The mix of public models in weights/candidates/ (and a submission built from it) also needs:
+einops==0.8.2                    # se/arch/mossformer_gan_se, se/arch/semamba, se/arch/xlstm_senet
+rotary-embedding-torch==0.6.1    # se/arch/tflocoformer (brings beartype)
+packaging==26.3                  # imported by se/arch/tflocoformer/tflocoformer_separator.py

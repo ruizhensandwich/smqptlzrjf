@@ -66,10 +66,27 @@ class Ensemble(nn.Module):
     fixed numbers stored in the checkpoint's model_args (the same for every input file) and
     are used as given divided by their sum. Each member runs on the input on its own,
     exactly as it would alone.
+
+    combine "wave" (default): weighted mean of the output waveforms.
+    combine "mag": weighted mean of the outputs' STFT magnitudes (400/100, Hann) with the phase
+    of member `phase_member`, one inverse STFT. On four validation sets this is 0.01 to 0.02
+    PESQ above the waveform mean with the same weights (results/mix_study/report.md): where
+    the members disagree in phase, a waveform mean cancels part of the speech, a magnitude
+    mean does not. `pcs` > 0 then applies Perceptual Contrast Stretching of that strength to
+    the averaged magnitude before the inverse STFT (se/pcs.py). An input too short for the
+    STFT falls back to the waveform mean.
     """
 
-    def __init__(self, members: list[dict]):
+    N_FFT, HOP = 400, 100
+
+    def __init__(self, members: list[dict], combine: str = "wave", phase_member: int = 0,
+                 pcs: float = 0.0):
         super().__init__()
+        if combine not in ("wave", "mag") or not 0 <= int(phase_member) < len(members) or pcs < 0:
+            raise ValueError("combine is 'wave' or 'mag', phase_member a member index, pcs >= 0")
+        if combine == "wave" and pcs:
+            raise ValueError("pcs needs combine='mag'")
+        self.combine, self.phase_member, self.pcs = combine, int(phase_member), float(pcs)
         if len(members) < 2 or any(m["model"] == "ensemble" or float(m["weight"]) <= 0
                                    for m in members):
             raise ValueError("an ensemble needs two or more members that are not ensembles, "
@@ -80,11 +97,20 @@ class Ensemble(nn.Module):
         self.weights = [float(m["weight"]) / total for m in members]
 
     def enhance(self, noisy: torch.Tensor) -> torch.Tensor:
-        out = None
-        for w, member in zip(self.weights, self.members):
-            y = w * member.enhance(noisy)
-            out = y if out is None else out + y
-        return out
+        outs = [member.enhance(noisy) for member in self.members]
+        if self.combine == "wave" or noisy.shape[-1] <= self.N_FFT:
+            return sum(w * y for w, y in zip(self.weights, outs))
+        from se.pcs import pcs_stretch
+        window = torch.hann_window(self.N_FFT, dtype=torch.float64, device=noisy.device)
+        spec = [torch.stft(y.double(), self.N_FFT, self.HOP, window=window, return_complex=True)
+                for y in outs]
+        mag = sum(w * s.abs() for w, s in zip(self.weights, spec))
+        phase = torch.angle(spec[self.phase_member])
+        y = torch.istft(torch.polar(mag, phase), self.N_FFT, self.HOP, window=window,
+                        length=noisy.shape[-1])
+        if self.pcs:
+            y = pcs_stretch(mag, phase, y, self.pcs, window, self.HOP)
+        return y.to(noisy.dtype)
 
 
 def _xlstm_senet(**model_args) -> nn.Module:

@@ -233,6 +233,14 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
   - 클리핑(피크가 16비트 최대값을 넘는 파일): 강도 0.5에서 validation 0.61 %, 새 잡음 0 %, 저역 0 %, 어려운 2.59 %(어려운 검증셋은 noisy 피크를 0.99로 맞춰 만든 파일). 점수는 클리핑된 출력 기준이다.
   - L 단독 + PCS 0.5 = 3.381 / 3.502 / 2.552 / 3.240: 섞기의 이득(+0.08~+0.10)은 PCS 뒤에도 그대로 남는다.
   - 아직 제출 경로에 넣지 않았다. 강도와 SNR 손실의 맞교환은 사용자 결정 대기.
+- **2회차 제출 후보**(2026-11-27, 사용자 결정): `weights/candidates/mix_lfm_mag_pcs05.pt`(78.17 MB) = TF-Locoformer 0.5(음량 보정 `level="proj"`) + MossFormerGAN 0.2 + MP-SENet DNS 0.3,
+  STFT 크기 평균 + TF-Locoformer 위상 + **PCS 강도 0.5**. 공개 가중치만 쓰고 과제 데이터로 학습한 부분이 없다. 만드는 명령:
+  `python tools/make_ensemble.py --members weights/candidates/tflocoformer_v8.pt weights/pretrained/mossformergan_se16k.pt weights/pretrained/mpsenet_dns.pt --weights 0.5 0.2 0.3 --member-set 0:level=proj --combine mag --phase-member 0 --pcs 0.5 --out weights/candidates/mix_lfm_mag_pcs05.pt`
+  - 제출 경로(`evaluate.py`, 16비트 출력) 재채점이 4단계 표와 같다: **validation 3.476 / 13.54 dB, 새 잡음 3.602 / 13.84, 어려운 2.635 / 9.80(lowsnr 2.58, newlow 2.87, babble 3.29, reverb 1.81), 저역 3.317 / 12.57, train 3.225 / 13.16**. 1회차 대비 validation +0.45, 새 잡음 +0.55, 어려운 +0.68.
+  - 형식 점검: 30 dB 작게 +0.033, 최대 음량 −0.008, 앞뒤 무음·−70 dBFS 0.000, 12초 −0.015, 30초 −0.016, 직류 +0.005.
+  - 코드: `se/arch/tflocoformer`의 `level`(기본 "none" = 공개 모델 그대로), `se/models.py` `Ensemble`의 `combine="mag"`·`phase_member`·`pcs`, `se/pcs.py`. `requirements.txt`에 einops 0.8.2, rotary-embedding-torch 0.6.1, packaging 26.3 추가(새 Python 3.12 venv에서 설치 후 `denoise.py --weights` 실행 확인).
+    피크가 최대값을 넘는 출력은 쓰기 전에 [−1, 32767/32768]로 잘린다(테스트 `tests/test_mix_pcs.py`, 정수 넘침 없음).
+  - **아직 `weights/submission.pt`는 1회차 그대로다.** 제출하려면 `tools/promote.py`가 아니라 이 파일을 `weights/submission.pt`로 두고 "제출 절차" 2번부터(`evaluate.py --round 2` …). README 재현 블록과 `check_submission.py` 7c(시작 가중치 출처)는 ensemble 멤버 표기를 처리하는지 제출 때 확인.
 - 학습 곡선의 모양: 60 epoch쯤 3.0, 80 epoch 이후 시간당 +0.03 이하, 막바지에 train만 오르고 validation이 멈춤.
   중단 조건은 `min_delta 0.01`, `patience 25`, `min_epochs 40`, `max_epochs 150`(사용자와 합의), 끝나면 VM 정지.
 

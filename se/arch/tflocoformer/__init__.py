@@ -13,6 +13,17 @@ settings of the source's DNS 2020 model: scale the input to unit standard deviat
 STFT 256/128, separator, inverse STFT, scale back. An input longer than 3 s is processed in
 overlapping 3 s pieces.
 
+Output level (`level`, added 2026-11-27). This DNS model returns the speech about 3.5 dB
+quieter than it is in the input (it was trained with a scale-invariant loss): the gain that
+brings its output to the clean reference has a median of 1.48 on the course train set (1st to
+99th percentile 1.43 to 1.67). PESQ ignores level, SNR and a mix with other models do not.
+`level="proj"` multiplies each file's output by the least-squares gain towards the NOISY input,
+g = <noisy, y> / <y, y> (if y = c * speech and the noise is uncorrelated with the speech, this
+is 1 / c; no clean reference is used), limited to [level_lo, level_hi] because the estimate
+drifts upwards when much noise is left (-5 dB: +5 % in the median, up to 2.4 in the hard set),
+and `level_const` when the output is silent. Validation SNR 9.12 -> 20.66 dB, PESQ unchanged
+(results/mix_study/report.md). The default "none" is the model as published.
+
 Needs the packages `rotary-embedding-torch` (and its dependency `beartype`) and `packaging`.
 """
 
@@ -24,8 +35,13 @@ from .tflocoformer_separator import TFLocoformerSeparator
 
 
 class LocoDenoiser(nn.Module):
-    def __init__(self, train_last_blocks=0):
+    def __init__(self, train_last_blocks=0, level="none", level_const=1.484, level_lo=1.35,
+                 level_hi=1.65):
         super().__init__()
+        if level not in ("none", "const", "proj"):
+            raise ValueError("level must be 'none', 'const' or 'proj'")
+        self.level, self.level_const = level, float(level_const)
+        self.level_lo, self.level_hi = float(level_lo), float(level_hi)
         self.separator = TFLocoformerSeparator(
             num_spk=1, n_layers=6, emb_dim=128, norm_type="rmsgroupnorm", num_groups=4,
             tf_order="ft", n_heads=4, flash_attention=False,
@@ -55,6 +71,19 @@ class LocoDenoiser(nn.Module):
         return recovered[..., :n] * scale
 
     def enhance(self, mixture):
+        out = self._enhance_any_length(mixture)
+        if self.level == "none":
+            return out
+        if self.level == "const":
+            return out * self.level_const
+        x, y = mixture.double(), out.double()
+        energy = (y * y).sum(-1)
+        gain = (x * y).sum(-1) / energy.clamp_min(1e-30)
+        gain = gain.nan_to_num(self.level_const).clamp(self.level_lo, self.level_hi)
+        gain = torch.where(energy > 1e-10 * y.shape[-1], gain, torch.full_like(gain, self.level_const))
+        return out * gain[..., None].to(out.dtype)
+
+    def _enhance_any_length(self, mixture):
         # Bound compute for arbitrary-length input. Three-second course clips take one pass.
         window, overlap = 48000, 8000
         n = mixture.shape[-1]

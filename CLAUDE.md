@@ -56,6 +56,7 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
 | 모델 비교표 (모든 모델의 PESQ·장단점) | `python tools/model_board.py` → `results/model_board.md` |
 | 스펙트로그램·청취 비교 | `python tools/spectrogram.py --models runs/<A> runs/<B> [--pick diverse\|worst\|best --n 4]` / `<segment_id> ...` / `--noisy any.wav [--clean ref.wav]` → `results/listening/<time>/index.html` (학생 녹음 포함: git 제외·공개 금지) |
 | 두 실행 비교 | `python compare.py <runA> <runB> [--split train]` |
+| 섞기 연구 (멤버 출력 저장 → 정렬·음량 진단 → 조합·결합 방식 비교, VM) | `python tools/mix_study.py dump --members L=W1 M=W2 …` → `align` → `gain --member L [--score]` → `mix --grid --gain L:proj:1.484:1.35:1.65` → `mix --combos … --method mag` → `report` (`runs/mix_study/`) |
 | 여러 모델을 한 가중치 파일로 (출력 파형의 고정 비율 평균) | `python tools/make_ensemble.py --members A.pt B.pt --weights 0.7 0.3 --out weights/candidates/E.pt` (모델 `ensemble`, 비율은 validation으로 큰 단위만 고른다) |
 | 다른 곳에서 학습한 가중치 들여오기 | `python tools/promote.py --state-dict X.pt --model xlstm_senet --source "..." --out weights/candidates/Y.pt` |
 | 제출 가중치 지정 | `python tools/promote.py runs/<run_id>` → `weights/submission.pt` |
@@ -201,12 +202,29 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
   `ckpts/pretrained_discriminator.pth`(747,574 B, 텐서 34개)는 `se/arch/metric_discriminator.py`의 `MetricDiscriminator`에 strict로 그대로 읽힌다(스크래치패드에만 있음, 학습 데이터 미표기).
   SEMamba++(Eddieyjlee/SEMambapp, Interspeech 2026)는 VCTK + LibriTTS로 학습한 음성 복원 모델이라 DNS 계열이 아니다(보류).
 - **VM Zeroth 원본 확인**(2026-11-26): `data/external/zeroth/full/`에 flac 22,720개(압축 파일 안의 개수와 같음)·화자 115명, 무작위 300개 모두 열림. 압축 파일(9.7 GB)과 학습 풀(559 MB)도 그대로. 디스크 여유 38 GB.
+- **3단계: 정렬·음량·섞기 연구**(2026-11-26~27, `tools/mix_study.py`, 표 전체는 `results/mix_study/report.md`, 파일별 점수는 `runs/mix_study/scores/`). 멤버 L = TF-Locoformer, M = MP-SENet DNS, F = MossFormerGAN, S = SEMamba, 모두 공개 가중치 그대로.
+  - **지연·극성 보정은 필요 없다**: 4종 검증셋 1,476개에서 네 모델 모두 clean과 지연 0·극성 같음(어려운 검증셋만 3 %가 ±1표본, 잔향·동시 발화 묶음), 모델끼리는 99.8~100 % 지연 0.
+  - **TF-Locoformer는 출력이 약 3.5 dB 작다**(clean에 맞추는 배율의 중앙값 1.48, train 1~99 % 구간 1.43~1.67). 비교표의 Val SNR 9.12 dB는 이 때문이고 PESQ는 음량을 보지 않아 그대로였다.
+    보정(SNR validation / 새 잡음 / 어려운 / 저역): 없음 9.12 / 9.19 / 7.56 / 8.64, 고정 1.484배 20.16 / 21.41 / 13.02 / 17.76, **파일별 자동 배율(g = <noisy, y> / <y, y>, [1.35, 1.65]로 제한, 출력이 무음이면 1.484) 20.66 / 22.07 / 13.09 / 17.98**, clean 기준(상한) 20.72 / 22.11 / 13.58 / 18.06. PESQ 변화 0.0001 이하.
+    자동 배율은 SNR이 낮을수록 위로 치우친다(−5 dB 중앙값 +5 %, 어려운 검증셋 최대 2.38배) → 제한이 필요하다. 클리핑: 고정 배율은 어려운 검증셋 3개(0.46 %), 자동 배율 1개(0.15 %, 피크 1.003), 나머지 검증셋 0개(최대 피크 0.89).
+    **아직 `se/arch/tflocoformer`에 넣지 않았다**(연구 도구에서만 적용, 넣을지는 사용자 결정). 이전 섞기 "0.6/0.2/0.2"는 L이 0.68배로 들어가 실제로는 약 0.5/0.25/0.25였다.
+  - 저역 검증셋 빈칸: MP-SENet DNS 공개 가중치 2.940(esc_low 3.22, synth_low 3.32, esc_low_snr 2.28).
+  - **조합(L 음량 보정 후 파형 평균, 0.1 단위 87개 조합, 비율은 validation + 새 잡음으로 선택; PESQ validation / 새 잡음 / 어려운 / 저역)**: L 단독 3.297 / 3.424 / 2.463 / 3.131,
+    L0.5+M0.5 3.383 / 3.506 / 2.515 / 3.172, L0.6+F0.4 3.360 / 3.495 / 2.522 / 3.182, L0.6+S0.4 3.350 / 3.482 / 2.498 / 3.104,
+    **L0.5+F0.2+M0.3 3.394 / 3.528 / 2.537 / 3.199**(SNR 20.14 / 21.91 / 12.84 / 17.66), L0.4+F0.2+M0.3+S0.1 3.394 / 3.530 / 2.535 / 3.184.
+    L+M 대비 F 추가: +0.011 / +0.021 / +0.021 / +0.027(새 잡음·어려운·저역에서 95 % 구간이 0 위). F+L+M 대비 S 추가: +0.000 / +0.003 / −0.002 / **−0.016**(저역 구간 −0.023~−0.008) → SEMamba는 이득이 없고 저역에서 손해.
+    섞으면 SNR은 L 단독보다 0.2~0.5 dB 낮다(L의 SNR이 가장 높아서). 음량 보정 전후로 같은 실효 비율이면 PESQ는 같다(보정 없는 0.6/0.2/0.2 = 3.392 / 3.528 / 2.537 / 3.200).
+  - **결합 방식: STFT(400/100) 크기 가중 평균 + L의 위상이 파형 평균보다 일관되게 낫다**(같은 비율). L0.5+F0.2+M0.3: **3.407 / 3.537 / 2.558 / 3.220**, 차이 +0.014 / +0.009 / +0.021(구간 +0.017~+0.025) / +0.021(+0.013~+0.029), SNR도 +0.01~+0.17 dB.
+    네 조합 모두 같은 방향(+0.009~+0.026). 0 dB·−5 dB에서 이득이 크다(어려운 −5 dB 2.356 → 2.390). 크기 평균용 비율은 따로 찾지 않았다. 4개 조합 크기 평균은 3.413 / 3.544 / 2.561 / 3.210.
+    잔향 묶음은 섞어도 1.68~1.70(천장 1.69 근처), L 단독 1.57.
 - 학습 곡선의 모양: 60 epoch쯤 3.0, 80 epoch 이후 시간당 +0.03 이하, 막바지에 train만 오르고 validation이 멈춤.
   중단 조건은 `min_delta 0.01`, `patience 25`, `min_epochs 40`, `max_epochs 150`(사용자와 합의), 끝나면 VM 정지.
 
 ## 작업 방식 (사용자 요청, 2026-11-22)
 - 실험은 한 번에 하나만 바꾼다.
-- 로컬 CPU에서는 pytest와 파일 몇 개짜리 확인만. 학습과 전체 채점은 GPU VM에서. CPU 추론 속도는 모델 선택 기준이 아니다.
+- 로컬 CPU에서는 pytest와 파일 몇 개짜리 확인만. 학습과 전체 채점은 GPU VM에서.
+- **모델·섞기 조합의 판단 기준**(사용자 결정 2026-11-26): **GPU 기준 성능(PESQ, 보조 SNR)과 가중치 95 MB 한도만 본다.** CPU 추론 시간(예: SEMamba 3초 파일당 3.9초)은 제약이 아니다(채점 환경은 GPU로 본다). 득실을 따질 때 CPU 속도를 단점으로 들지 않는다.
+  단, **설치에 CUDA 커널 컴파일(`nvcc`)이 필요한 패키지(`mamba-ssm`, `causal-conv1d` 등)는 계속 쓰지 않는다**(`pip install -r requirements.txt`가 깨질 위험). 그런 모델은 순수 PyTorch 구현으로만 들인다. 코드는 CPU에서도 돌아야 한다(README 약속, 느려도 됨).
 - 일반화가 최우선이다(히든 테스트는 1차보다 어렵다). validation 0.0x 차이보다 과적합 여부를 본다.
 - **큰 결정은 사용자가 내린다** (사용자 요청, 2026-11-24). 학습 시작, 비율·설정 변경, 새 기법·데이터 도입 전에는 "시작할까요?"만 묻지 말고, 사용자가 판단할 핵심 쟁점과 대안 1~2개(각각의 득실)와 Claude의 권고를 먼저 보여 주고 결정을 기다린다. 사용자가 질문하면 코드를 고치기 전에 왜 그렇게 돌아가는지부터 쉬운 말로 설명한다.
 - GPU VM은 Python 3.10이다. 학습을 시작하기 전에 VM에서 pytest와 `py_compile`을 돌린다.

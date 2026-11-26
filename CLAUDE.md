@@ -151,7 +151,9 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
   새 잡음 **2.586**. 같은 조건의 MP-SENet(57 epoch 2.945)보다 낮고 추론은 약 6배 느리다. mpsenet_esc와 출력 평균(7:3)은
   75 epoch 기준 validation 3.006(+0.04) / 새 잡음 2.922(−0.08), 103 epoch 기준(8:2) 3.060(+0.02) / 2.998(−0.06): **새 잡음에서 손해라 제출에 쓰지 않는다**(사용자 결정).
   가중치 `weights/candidates/xlstm_ep57.pt`는 기록용(평균 파일은 `tools/make_ensemble.py`로 다시 만든다).
-- 히든 테스트(1회차, mpsenet_esc 100 epoch): **약 2.4** (조교: 1차보다 어렵게 구성). validation 3.02, 새 잡음 3.05 둘 다 예측 못 함.
+- 히든 테스트(1회차, mpsenet_esc 100 epoch): 조교가 테스트셋을 어렵게 고치기 **전 3.12, 고친 뒤 약 2.4**(사용자 전달 2026-11-26).
+  수정 전 점수는 validation 3.02와 비슷하다. validation은 원래 테스트셋을 잘 예측했고, −0.7은 조교가 더한 어려움 몫이다.
+  round1 기준 어려운 검증셋(1.96)이 validation보다 1.06 낮고 수정 후 히든은 0.72 낮다. 수정 후 히든은 그 사이, validation 쪽에서 약 2/3 지점이다(한 점뿐이라 대략).
 - **어려운 검증셋**(`tools/make_hardset.py`, 2026-11-25): validation 말소리 164개마다 한 가지만 바꾼 4묶음 656개.
   lowsnr = 같은 쌍의 잡음을 −5/0 dB로, newlow = ESC-50 fold 5를 −5/0 dB로, babble = Zeroth 제외 화자 10명 중 3~6명의 동시 발화(원래 SNR),
   reverb = 합성 잔향(RT60 0.3~0.8 s) + 원래 잡음, 기준은 잔향 없는 clean. 입력 1.206. 결과(전체 / lowsnr / newlow / babble / reverb):

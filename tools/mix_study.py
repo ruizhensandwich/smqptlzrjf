@@ -6,6 +6,8 @@
     python tools/mix_study.py mix   --grid [--gain L:proj:1.48:1.2:1.8]
     python tools/mix_study.py mix   --combos L0.6+M0.2+F0.2 --method mag --phase L
     python tools/mix_study.py report
+    python tools/mix_study.py pcs   --targets LFM=L0.5+F0.2+M0.3 L=L1.0 --gain L:proj:1.484:1.35:1.65
+    python tools/mix_study.py pcs-report
 
 Each member's output is computed once per split (dump, on the GPU) and kept in
 runs/mix_study/<split>/<member>.npy; everything else works on those files. Scores are of the
@@ -347,10 +349,157 @@ def cmd_report(args) -> None:
                 print(f"  {k.split('|')[0]:28s} " + "  ".join(f"{s} {mean[k][s][0]:.3f}/{mean[k][s][1]:.2f}" for s in SPLITS))
 
 
+# ---------------------------------------------------------------- PCS
+# Perceptual Contrast Stretching (Chao et al., Interspeech 2022). Band weights for a 400-point
+# STFT (201 bins): the PCS400 table of https://github.com/RoyChao19477/SEMamba (models/pcs400.py,
+# commit 750ff5d, MIT). The source computes  |X| -> expm1(w * log1p(|X|))  on a Hamming-window
+# STFT of the waveform as it is and then sets the peak of the result to 1.
+PCS400 = np.ones(201)
+PCS400[3:5] = 1.070175439
+PCS400[5:8] = 1.182456140
+PCS400[8:10] = 1.287719298
+PCS400[10:110] = 1.4
+PCS400[110:130] = 1.322807018
+PCS400[130:160] = 1.238596491
+PCS400[160:190] = 1.161403509
+PCS400[190:201] = 1.077192982
+PCS_PEAK = 1.0          # with norm = "peak": level at which PCS is applied (log1p depends on the level)
+PCS_EPS = 1e-8
+
+
+def pcs_magnitude(mag, strength: float, mode: str):
+    """mag [..., 201, frames] (torch). mode 'coef': weights 1 + strength * (w - 1);
+    'blend': (1 - strength) * mag + strength * PCS(mag). Both are PCS400 at strength 1."""
+    import torch
+    w = torch.from_numpy(PCS400).to(mag.dtype)[:, None]
+    if mode == "coef":
+        return torch.expm1((1 + strength * (w - 1)) * torch.log1p(mag))
+    return (1 - strength) * mag + strength * torch.expm1(w * torch.log1p(mag))
+
+
+def _window(kind: str):
+    import torch
+    if kind == "hann":
+        return torch.hann_window(400, dtype=torch.float64)
+    from scipy.signal.windows import hamming
+    return torch.from_numpy(hamming(400)).double()          # symmetric, as in the source
+
+
+def pcs_apply(mag, phase, y0, strength: float, mode: str, norm: str, window):
+    """PCS on a magnitude spectrum, one inverse STFT, then the level of y0 (the output without PCS).
+
+    norm 'peak': the spectrum is scaled so that y0 would peak at PCS_PEAK, stretched, scaled back
+    (the same stretch for a quiet and a loud copy of a file); 'asis': stretched at its own level,
+    as the source does. A silent y0 is returned as it is (no division by a zero peak). The level
+    is restored by the least-squares gain towards y0 (no reference needed), not by setting the
+    peak to 1.
+    """
+    import torch
+    peak = y0.abs().amax(-1)
+    ok = peak > PCS_EPS
+    if norm == "peak":
+        c = torch.where(ok, PCS_PEAK / peak.clamp_min(PCS_EPS), torch.ones_like(peak))
+    else:
+        c = torch.ones_like(peak)
+    stretched = pcs_magnitude(mag * c[:, None, None], strength, mode) / c[:, None, None]
+    y1 = torch.istft(torch.polar(stretched, phase), 400, 100, window=window, length=y0.shape[-1])
+    e = (y1 * y1).sum(-1)
+    g = torch.where(e > PCS_EPS, (y0 * y1).sum(-1) / e.clamp_min(PCS_EPS), torch.ones_like(e))
+    return torch.where(ok[:, None], y1 * g[:, None], y0)
+
+
+def pcs_configs() -> list[tuple[str, str, str, float]]:
+    """(site, norm, mode, strength); strength 1 is the same for both modes."""
+    out = []
+    for site in ("spec", "wave"):
+        for norm in ("peak", "asis"):
+            out += [(site, norm, "coef", v) for v in (0.25, 0.5, 0.75, 1.0)]
+            out += [(site, norm, "blend", v) for v in (0.25, 0.5, 0.75)]
+    return out
+
+
+def cmd_pcs(args) -> None:
+    import torch
+    store = CACHE / "scores_pcs"
+    store.mkdir(parents=True, exist_ok=True)
+    targets = {t.split("=")[0]: parse_combo(t.split("=")[1]) for t in args.targets}
+    hann, hamming = _window("hann"), _window("hamming")
+    with ProcessPoolExecutor(args.workers) as pool:
+        for split in args.splits:
+            noisy, clean = load_split(split)
+            names = sorted({m for w in targets.values() for m in w})
+            n = len(member(split, names[0]))
+            noisy, clean = noisy[:n], clean[:n]
+            outs = {m: torch.from_numpy(apply_gain(args.gain, m, noisy, member(split, m))) for m in names}
+            path = store / f"{split}.json"
+            data = json.loads(path.read_text()) if path.exists() else {}
+
+            def save(key, y):
+                y = y.numpy()
+                sc = score_all(pool, clean, y)
+                peak = np.abs(y).max(1)
+                data[key] = {"pesq": sc[:, 0].round(4).tolist(), "snr": sc[:, 1].round(3).tolist(),
+                             "peak": peak.round(4).tolist()}
+                path.write_text(json.dumps(data))
+                print(f"[{split}] {key}: PESQ {np.nanmean(sc[:, 0]):.4f} SNR {sc[:, 1].mean():.2f} "
+                      f"clip {np.mean(peak > FULL_SCALE) * 100:.2f} %", flush=True)
+
+            for tname, weights in targets.items():
+                total = sum(weights.values())
+                spec = {m: torch.stft(outs[m], 400, 100, window=hann, return_complex=True) for m in weights}
+                mag = sum(spec[m].abs() * (w / total) for m, w in weights.items())
+                phase = torch.angle(spec[args.phase])
+                y0 = torch.istft(torch.polar(mag, phase), 400, 100, window=hann, length=noisy.shape[-1])
+                del spec
+                if f"{tname}|none" not in data or args.force:
+                    save(f"{tname}|none", y0)
+                # the same output seen through the source's Hamming STFT, for PCS as a waveform post-step
+                s0 = torch.stft(y0, 400, 100, window=hamming, return_complex=True, pad_mode="constant")
+                mag_w, phase_w = s0.abs(), torch.angle(s0)
+                del s0
+                for site, norm, mode, strength in pcs_configs():
+                    key = f"{tname}|{site}|{norm}|{mode}|{strength}"
+                    if key in data and not args.force:
+                        continue
+                    if site == "spec":
+                        y = pcs_apply(mag, phase, y0, strength, mode, norm, hann)
+                    else:
+                        y = pcs_apply(mag_w, phase_w, y0, strength, mode, norm, hamming)
+                    save(key, y)
+
+
+def cmd_pcs_report(args) -> None:
+    splits = tuple(args.splits)
+    data = {s: json.loads((CACHE / "scores_pcs" / f"{s}.json").read_text()) for s in splits}
+    targets = sorted({k.split("|")[0] for k in data[splits[0]]})
+    for t in targets:
+        base = {s: data[s][f"{t}|none"] for s in splits}
+        print(f"\n## {t}\n")
+        print("Without PCS: " + ", ".join(
+            f"{s} {np.nanmean(base[s]['pesq']):.3f} / {np.mean(base[s]['snr']):.2f} dB "
+            f"(clip {np.mean(np.array(base[s]['peak']) > FULL_SCALE) * 100:.2f} %)" for s in splits))
+        print("\nPESQ change with 95 % interval / SNR change (dB) / files over full scale (%). "
+              "site: spec = on the averaged magnitude (Hann), wave = on the finished waveform (Hamming, as the source); "
+              "norm: peak = stretched at peak 1 and scaled back, asis = at the file's own level.\n")
+        print("| site | norm | mode | strength | " + " | ".join(splits) + " |")
+        print("|---|---|---|---|" + "---|" * len(splits))
+        keys = [k for k in data[splits[0]] if k.startswith(t + "|") and not k.endswith("|none")]
+        for k in keys:
+            cells = []
+            for s in splits:
+                d = np.array(data[s][k]["pesq"]) - np.array(base[s]["pesq"])
+                d = d[np.isfinite(d)]
+                lo, hi = boot_ci(d)
+                cells.append(f"{d.mean():+.3f} ({lo:+.3f}, {hi:+.3f}) / "
+                             f"{np.mean(data[s][k]['snr']) - np.mean(base[s]['snr']):+.2f} / "
+                             f"{np.mean(np.array(data[s][k]['peak']) > FULL_SCALE) * 100:.2f}")
+            print("| " + " | ".join(k.split("|")[1:]) + " | " + " | ".join(cells) + " |")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("dump", "align", "gain", "mix", "report"):
+    for name in ("dump", "align", "gain", "mix", "report", "pcs", "pcs-report"):
         p = sub.add_parser(name)
         p.add_argument("--splits", nargs="+", default=list(SPLITS))
         p.add_argument("--workers", type=int, default=8)
@@ -375,8 +524,13 @@ def main(argv=None) -> int:
         if name == "report":
             p.add_argument("--anchor", default="L")
             p.add_argument("--top", type=int, default=10)
+        if name == "pcs":
+            p.add_argument("--targets", nargs="+", required=True, help="NAME=L0.5+F0.2+M0.3 ...")
+            p.add_argument("--gain", default="")
+            p.add_argument("--phase", default="L")
     args = ap.parse_args(argv)
-    {"dump": cmd_dump, "align": cmd_align, "gain": cmd_gain, "mix": cmd_mix, "report": cmd_report}[args.cmd](args)
+    {"dump": cmd_dump, "align": cmd_align, "gain": cmd_gain, "mix": cmd_mix, "report": cmd_report,
+     "pcs": cmd_pcs, "pcs-report": cmd_pcs_report}[args.cmd](args)
     return 0
 
 

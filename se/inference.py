@@ -26,14 +26,24 @@ FULL_SCALE = 1.0 - 2.0 ** -15
 # real edges of files 30 dB quieter than the course files, -0.17 PESQ). In the course noisy
 # files (train 1,296, validation 164) the edges are at most 25 dB below that level and no
 # file has a qualifying run, so on course-like files the guard does nothing (bit-identical).
+# The level is a percentile of frame levels, not the peak: a click or pop shorter than 10 %
+# of the file does not move it. Two safeguards for the files that are cut (2026-11-26):
+# EDGE_MARGIN_SECONDS of the quiet run is kept on each cut side, so a weak onset or decay
+# just outside the first/last loud frame still reaches the model, and the output is faded
+# over EDGE_FADE_SECONDS at each cut (inside the margin) instead of stepping to zero.
 EDGE_FRAME = 320                # 20 ms at 16 kHz
 EDGE_GAP_DB = 40.0              # below the file's 90th-percentile frame level
 EDGE_MIN_SECONDS = 0.1
 EDGE_MIN_KEEP_SECONDS = 0.25    # if less than this would be left, enhance the whole file
+EDGE_MARGIN_SECONDS = 0.04      # of the quiet run kept next to the first/last loud frame
+EDGE_FADE_SECONDS = 0.01        # raised-cosine fade of the output at a cut
 
 
 def quiet_edges(x: np.ndarray, sr: int = SAMPLE_RATE) -> tuple[int, int]:
-    """(start, stop) of the part to enhance; (0, len(x)) when there are no quiet edges."""
+    """(start, stop) of the part to enhance; (0, len(x)) when there are no quiet edges.
+
+    A cut side keeps EDGE_MARGIN_SECONDS of its quiet run.
+    """
     n = x.size
     frames = n // EDGE_FRAME
     if frames == 0:
@@ -49,7 +59,21 @@ def quiet_edges(x: np.ndarray, sr: int = SAMPLE_RATE) -> tuple[int, int]:
     stop = (frames - tail) * EDGE_FRAME if tail >= min_run else n
     if stop - start < EDGE_MIN_KEEP_SECONDS * sr:
         return 0, n
-    return start, stop
+    margin = int(EDGE_MARGIN_SECONDS * sr)
+    return max(0, start - margin), min(n, stop + margin)
+
+
+def fade_cut_edges(y: np.ndarray, cut_head: bool, cut_tail: bool, sr: int = SAMPLE_RATE) -> np.ndarray:
+    """Raised-cosine fade-in/out of the enhanced part on the sides that were cut."""
+    k = min(int(EDGE_FADE_SECONDS * sr), y.size // 2)
+    if k > 0 and (cut_head or cut_tail):
+        ramp = 0.5 - 0.5 * np.cos(np.pi * (np.arange(k) + 0.5) / k)
+        y = y.copy()
+        if cut_head:
+            y[:k] *= ramp
+        if cut_tail:
+            y[-k:] *= ramp[::-1]
+    return y
 
 
 def pick_device(name: str = "auto") -> torch.device:
@@ -64,7 +88,7 @@ def enhance(model, x: np.ndarray, sr: int, device: torch.device) -> np.ndarray:
 
     Inputs at another rate are resampled to 16 kHz and back (the challenge
     input is 16 kHz, so this is only a safety net). Quiet edges (see quiet_edges)
-    are not enhanced and come out as zeros.
+    are not enhanced and come out as zeros, with a short fade at each cut.
     """
     x = np.asarray(x, dtype=np.float64)
     n = x.size
@@ -74,6 +98,7 @@ def enhance(model, x: np.ndarray, sr: int, device: torch.device) -> np.ndarray:
     y = model.enhance(wave)[0].double().cpu().numpy()
     if (a, b) != (0, y16.size):
         mid = y[:b - a] if y.size >= b - a else np.pad(y, (0, b - a - y.size))
+        mid = fade_cut_edges(mid, a > 0, b < y16.size)
         y = np.concatenate([np.zeros(a), mid, np.zeros(y16.size - b)])
     if sr != SAMPLE_RATE:
         y = resample_poly(y, sr, SAMPLE_RATE)

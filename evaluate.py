@@ -118,7 +118,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--weights", type=Path, default=SUBMISSION_WEIGHTS)
-    ap.add_argument("--split", choices=["validation", "train", "newnoise", "hard", "all"],
+    ap.add_argument("--split", choices=["validation", "train", "newnoise", "hard", "lowband", "all"],
                     default="validation",
                     help="newnoise = validation speech with unseen noise (tools/make_newnoise.py); "
                          "hard = validation speech at low SNR, unseen noise, babble, reverb "

@@ -13,6 +13,7 @@
 | 9 | mpsenet_esc_ep100 | mpsenet | 2263k | 3.022 | +1.628 | 3.052 | +1.533 | 18.01 | 2.234 | 3.407 | 3.307 | **0.0%** | 3.197 | +0.099 | 103ep/100 · 627.4분 · cuda | 0.033 (cuda) | 2026-11-25 |
 | 10 | mossformergan_pretrained | mossformer_gan_se | 3129k | 3.135 | +1.741 | 3.273 | +1.754 | 18.94 | 2.428 | 3.475 | 3.526 | **0.0%** | 2.946 | -0.265 | - | 0.133 (cuda) | 2026-11-25 |
 | 11 | tflocoformer_dns_v8 | tflocoformer | 14973k | 3.297 | +1.903 | **3.424** | **+1.905** | 9.12 | 2.671 | 3.611 | **3.692** | **0.0%** | 3.083 | **-0.290** | - | 0.086 (cuda) | 2026-11-25 |
+| 12 | semamba_vd | semamba | 2259k | 3.085 | +1.690 | 3.233 | +1.714 | 17.51 | 2.454 | 3.385 | 3.512 | 1.2% | 2.966 | -0.195 | - | 0.136 (cuda) | 2026-11-26 |
 
 | # | 태그 | 장점 | 단점 | 메모 |
 |---|---|---|---|---|
@@ -27,5 +28,6 @@
 | 9 | mpsenet_esc_ep100 | 입력보다 나빠지는 파일이 거의 없음 (0.0%)<br>가장 잘 줄이는 잡음: bell (+2.66) | 최고 모델보다 -0.296<br>과적합 경향: train 개선이 validation보다 +0.099 큼<br>가장 약한 잡음: vehicle_interior (+0.97) | mpsenet_esc at epoch 100 (round 1 submission weights): the last of the checkpoints kept every 25 epochs |
 | 10 | mossformergan_pretrained | 입력보다 나빠지는 파일이 거의 없음 (0.0%)<br>가장 잘 줄이는 잡음: clap (+2.50) | 최고 모델보다 -0.183<br>가장 약한 잡음: vehicle_interior (+0.64) | ClearerVoice MossFormerGAN_SE_16K public weights, scored as they are (never trained on course data) |
 | 11 | tflocoformer_dns_v8 | 어려운 잡음(hard)에서 가장 강함 (3.692)<br>입력보다 나빠지는 파일이 거의 없음 (0.0%)<br>일반화 차가 가장 작음 (-0.290)<br>가장 잘 줄이는 잡음: clap (+2.93) | 최고 모델보다 -0.021<br>가장 약한 잡음: vehicle_interior (+0.55) | TF-Locoformer DNS 2020 weights as packed in the teammate v8 ensemble (55 % member), scored alone. Never trained on course data. Weights reached us through that package, not from the MERL repository |
+| 12 | semamba_vd | 입력보다 나빠지는 파일이 거의 없음 (1.2%)<br>가장 잘 줄이는 잡음: clap (+2.65) | 최고 모델보다 -0.233<br>가장 약한 잡음: vehicle_interior (+0.49) | SEMamba ckpts/vd.pth (VCTK-Demand + DNS-2020, authors' weights) as is, Mamba in plain PyTorch; no training here |
 
 ΔPESQ = 입력(noisy) 대비 개선 · 새 잡음 = validation 말소리에 과제 데이터에 없는 잡음(ESC-50 fold 5)을 같은 SNR로 섞은 164개(`tools/make_newnoise.py`), 학습에 쓰지 않음 · 0 dB/15 dB/hard = 해당 조건의 Val PESQ · 나빠진 파일 = 입력보다 PESQ가 낮아진 validation 파일 비율 · 일반화 차 = train 개선 − validation 개선 (클수록 학습 화자에 치우침) · 학습 = 실행 epoch/선택 epoch · 추론 속도 = 추론 시간 ÷ 음성 길이 (낮을수록 빠름) · 범주 장단점은 train 1,296개 기준

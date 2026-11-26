@@ -102,12 +102,18 @@ def _mossformer_gan_se(**model_args) -> nn.Module:
     return MossFormerGANSE16K(**model_args)
 
 
+def _semamba(**model_args) -> nn.Module:
+    from se.arch.semamba import SEMambaDenoiser     # imported on use: needs einops
+    return SEMambaDenoiser(**model_args)
+
+
 MODELS: dict[str, type[nn.Module]] = {
     "mask_cnn": MaskCNN,
     "mpsenet": MPSENet,          # se/arch/mpsenet.py (MP-SENet, MIT License)
     "xlstm_senet": _xlstm_senet,  # se/arch/xlstm_senet/ (xLSTM-SENet, MIT License)
     "tflocoformer": _tflocoformer,  # se/arch/tflocoformer/ (TF-Locoformer, Apache-2.0)
     "mossformer_gan_se": _mossformer_gan_se,  # se/arch/mossformer_gan_se/ (ClearerVoice, Apache-2.0)
+    "semamba": _semamba,        # se/arch/semamba/ (SEMamba, MIT License; Mamba in plain PyTorch)
     "ensemble": Ensemble,       # weighted mean of member models (tools/make_ensemble.py)
 }
 

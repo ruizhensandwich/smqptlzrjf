@@ -69,6 +69,7 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
 ## 구조
 - `se/`: `models.py`(MODELS 레지스트리, 모델은 `enhance(noisy[B,T]) -> [B,T]`), `losses.py`(LOSSES, `loss(model, noisy, clean)`), `config.py`(기본값 = 배포 노트북, 모르는 키는 오류), `data.py`(DATA_ROOT 또는 `data/`, 파형 캐시), `checkpoint.py`(가중치+모델 설정+학습 정보를 한 파일에), `inference.py`(denoise와 evaluate가 공유, 16비트로 쓰고 다시 읽은 값으로 채점), `metrics.py`.
 - `se/arch/`: 공개 코드에서 이식한 모델(파일 하나에 모델 하나, 첫머리에 출처·라이선스·바꾼 점). `se/trainers.py`: 한 epoch 학습(`Trainer` = 손실 하나, `MetricGANTrainer` = PESQ 예측 판별기 포함). 설정의 `discriminator`·`data.*`(구간 자르기, 동적 재혼합)·`train.optimizer/scheduler`로 고른다. 기본값은 배포 노트북 그대로.
+- `se/arch/semamba/`: SEMamba(공개 코드 + 순수 PyTorch Mamba `mamba_torch.py` + `enhance()` 래퍼, `einops` 필요). 추론만 한다.
 - `se/arch/xlstm_senet/`: xLSTM-SENet(공개 코드 그대로 + `__init__.py`의 `enhance()` 래퍼, `einops` 필요). 이 저장소에서는 추론만 한다(학습은 팀원의 별도 하네스에서 했고 그 학습 코드는 이 저장소에 없다). `se/models.py`의 `ensemble`은 여러 모델을 한 파일에 담아 출력을 평균한다.
 - 새 모델: `se/arch/<이름>.py` → `se/models.py`의 MODELS에 한 줄(손실이 새로 필요하면 `se/losses.py`) → `configs/<이름>.json` → train → evaluate. MP-SENet 계열(analysis/forward/synthesis 인터페이스)은 손실 `mpsenet`과 판별기를 그대로 쓴다.
 - 동적 재혼합(`se/data.py` `RemixedSpeech`): train 쌍의 잡음(noisy − clean)을 다른 train 발화에 무작위 SNR로 섞는다. train 데이터만, 메모리에서만. 재료 기준은 `REMIX_LIMITS`(2026-11-22 확인: 1,296개 모두 지연 0·SNR 오차 0.002 dB 이내, 잡음이 대부분 무음인 6개만 제외).
@@ -184,15 +185,22 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
 - **잔향 묶음 점검**(2026-11-26, 로컬, 모델 없이): `room_response`는 직접음이 0번 표본이라 지연이 없다(같은 RT60로 다시 만든 164개에서 상호상관 최대 위치 0이 155개, 나머지 9개는 ±4표본 이내 = 무작위 꼬리 탓).
   **잡음 없이 잔향만 있는 말소리를 마른 clean과 비교한 PESQ = 평균 1.687**(RT60 0.30~0.45 s 1.93, 0.45~0.60 s 1.75, 0.60~0.80 s 1.47; 직접음 대 잔향 비 +4.9~+2.4 dB), 잡음까지 더한 입력 1.226.
   즉 모델들의 1.58~1.79는 "잡음은 다 지웠지만 잔향은 못 지운" 천장과 같다. 낮은 점수는 지연이 아니라 잔향 제거 능력(과 마른 clean 기준) 몫이고, MossFormerGAN(1.79)만 천장을 조금 넘는다. 검증셋은 그대로 둔다(사용자 결정).
-- **무음 처리 보완**(2026-11-26, 사용자 결정): 기준(프레임 크기 90 % 지점 − 40 dB)은 그대로. 백분위 기준이라 파일의 10 %보다 짧은 충격음은 기준을 움직이지 못한다(테스트 추가).
-  잘린 쪽마다 조용한 구간 40 ms를 남겨 모델에 넣고(`EDGE_MARGIN_SECONDS`), 출력은 잘린 경계에서 10 ms 페이드(`EDGE_FADE_SECONDS`, 여유 구간 안). 과제 noisy 1,460개는 여전히 0개가 걸린다(30 dB 작게 해도 0개).
-  **VM `tools/format_check.py` 재측정은 아직 안 함**(여유 40 ms가 무음·−70 dBFS 회복을 깎는지 확인 필요, 깎으면 페이드만 남긴다).
+- **무음 처리 보완 시도 → 되돌림**(2026-11-26): 기준(프레임 크기 90 % 지점 − 40 dB)은 백분위라 파일의 10 %보다 짧은 충격음에 움직이지 않는다(테스트 추가, 이것만 남김).
+  잘린 쪽에 조용한 구간 40 ms를 남겨 모델에 넣고 출력에 10 ms 페이드를 넣어 봤으나 **손해라 뺐다**. VM `format_check`(164개, 앞뒤 무음 1초 / −70 dBFS 잡음 1초):
+  여유 40 ms가 있으면 MP-SENet DNS −0.22 / −0.21, TF-Locoformer −0.39 / −0.31, SEMamba −0.32 / −0.36, MossFormerGAN −0.07 / −0.04 (여유 없으면 모두 0.00). **입력 앞에 무음이 40 ms만 있어도 이 모델들은 크게 손해 본다.**
+  페이드만 남긴 경우도 −0.02(MP-SENet, 로컬 12개): 자르는 자리가 첫 큰 프레임이라 페이드가 실제 신호를 깎는다. `se/inference.py`는 원래 자르기 그대로다.
+  같은 측정에서 상대 기준은 확인됐다: 30 dB 작게 녹음한 파일이 +0.04~+0.06(절대 기준 때 −0.15~−0.18).
 - **2회차 이후 방향**(사용자 결정 2026-11-26): DNS 계열 사전학습 가중치 기반, **PCS(Perceptual Contrast Stretching) 적용·검증**(후처리 기법 결정), Zeroth 음성을 섞은 낮은 SNR 이어 학습(+MetricGAN, EMA, WiSE-FT). VM의 Zeroth 원본 파일(10 GB)은 지우지 않는다.
-- **SEMamba 사전 확인**(2026-11-26, 페이지만 읽음, 받지 않음): RoyChao19477/SEMamba(MIT, 커밋 `750ff5d`). `ckpts/vd.pth` 9,142,810 B = **VCTK-Demand + DNS-2020 학습**(README: DNS-2020 PESQ 3.66, PCS 3.70),
-  `ckpts/SEMamba_advanced.pth` 9,127,253 B(학습 데이터 미표기), `ckpts/pretrained_discriminator.pth` 747,574 B(통째로 state dict, 학습 데이터 미표기). Git LFS 아님. 가중치 라이선스는 따로 적혀 있지 않다.
-  STFT 400/100/400, TFMamba 4개, 채널 64, d_state 16, d_conv 4, expand 4. 판별기 클래스는 MP-SENet의 `MetricDiscriminator`와 같은 구조(dim 16)라 `se/arch/metric_discriminator.py`에 그대로 읽힐 것으로 보인다(키 이름은 받아서 확인).
-  **`mamba-ssm`은 CUDA·nvcc가 있어야 설치되고 CPU를 지원하지 않아 제출 requirements에 넣을 수 없다** → Mamba 블록을 순수 PyTorch로 옮겨 같은 가중치를 읽는다. 용량: 현재 섞기 78.15 MB + 8.72 MB = 86.9 MB(95 MB 이내).
+- **SEMamba**(2026-11-26, `se/arch/semamba/`, 모델 이름 `semamba`, `weights/pretrained/semamba_vd.pt` 8.70 MB): RoyChao19477/SEMamba(MIT, 커밋 `750ff5d`)의 `ckpts/vd.pth`
+  (9,142,810 B, sha256 e0c2db3f…, **VCTK-Demand + DNS-2020 학습**, 순수 DNS 가중치는 없음. 가중치 라이선스는 따로 적혀 있지 않다)를 값 그대로 변환. STFT 400/100/400, TFMamba 4개, 채널 64.
+  `mamba-ssm`은 CUDA·nvcc가 있어야 설치되어(우리 VM에도 nvcc가 없어 빌드 실패) 제출에 쓸 수 없다 → **Mamba를 순수 PyTorch로 새로 썼다**(`mamba_torch.py`, 가중치 이름·모양 동일).
+  대조(VM, validation 164개): 원 저장소 코드 + 번들 `mamba_ssm` 1.2.2 소스(참조 스캔 `selective_scan_ref`, RMSNorm은 triton 커널)와 **PESQ 3.0850 대 3.0850**(파일별 최대 차 0.0013), 파형 차 16비트 평균 2단계·최대 10단계. CUDA 커널 자체와는 대조하지 못했다.
+  CPU 속도(로컬 8스레드, 3초 파일): `torch.jit.script` 순차 루프 3.9초, Python 루프 4.9초, 병렬 접두 스캔은 스캔만 약 12배 느림(연산량 log₂L배, 캐시 초과) → 순차 루프 채택. GPU 0.5초.
+  **그대로 채점: validation 3.085 / 새 잡음 3.233 / train 2.966 / 어려운 2.241(lowsnr 2.25, newlow 2.52, babble 2.68, reverb 1.52) / 저역 2.791(esc_low 3.11, synth_low 2.95, esc_low_snr 2.31).**
+  DNS 계열 넷 중 validation·새 잡음·저역에서 가장 낮다(MP-SENet DNS 3.176 / 3.336, MossFormerGAN 3.135 / 3.273, TF-Locoformer 3.297 / 3.424). newlow만 MP-SENet DNS(2.50)·MossFormerGAN(2.47)과 같은 수준. 인공 저역 잡음(synth_low 2.95)이 특히 약하다(다른 모델 3.33~3.51). 섞기에서의 가치는 아직 재지 않았다(3단계).
+  `ckpts/pretrained_discriminator.pth`(747,574 B, 텐서 34개)는 `se/arch/metric_discriminator.py`의 `MetricDiscriminator`에 strict로 그대로 읽힌다(스크래치패드에만 있음, 학습 데이터 미표기).
   SEMamba++(Eddieyjlee/SEMambapp, Interspeech 2026)는 VCTK + LibriTTS로 학습한 음성 복원 모델이라 DNS 계열이 아니다(보류).
+- **VM Zeroth 원본 확인**(2026-11-26): `data/external/zeroth/full/`에 flac 22,720개(압축 파일 안의 개수와 같음)·화자 115명, 무작위 300개 모두 열림. 압축 파일(9.7 GB)과 학습 풀(559 MB)도 그대로. 디스크 여유 38 GB.
 - 학습 곡선의 모양: 60 epoch쯤 3.0, 80 epoch 이후 시간당 +0.03 이하, 막바지에 train만 오르고 validation이 멈춤.
   중단 조건은 `min_delta 0.01`, `patience 25`, `min_epochs 40`, `max_epochs 150`(사용자와 합의), 끝나면 VM 정지.
 

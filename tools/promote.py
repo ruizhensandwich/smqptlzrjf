@@ -82,7 +82,7 @@ def main(argv=None) -> int:
         name, model_args = args.model, {}
         model = build_model(name, model_args)
         data = torch.load(args.state_dict, map_location="cpu", weights_only=True)
-        state = data["model"] if isinstance(data.get("model"), dict) else data
+        state = next((data[k] for k in ("model", "generator") if isinstance(data.get(k), dict)), data)
         if hasattr(model, "net") and not any(k.startswith("net.") for k in state):
             state = {f"net.{k}": v for k, v in state.items()}      # wrapper around the source net
         model.load_state_dict(state)

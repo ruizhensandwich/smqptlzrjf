@@ -120,6 +120,21 @@ def render_submissions(data: dict) -> str:
     return "\n".join(lines)
 
 
+OUTSIDE = {"external_noise": {"esc50": "ESC-50 fold 1~4 잡음"},
+           "external_speech": {"zeroth": "Zeroth-Korean 105명의 말소리"}}
+
+
+def outside_data(ts: dict) -> str:
+    """The outside training data of a run in words (README's outside-data table has the details)."""
+    used = []
+    for key, names in OUTSIDE.items():
+        name = ts.get(f"data.{key}")
+        if name:
+            used.append(f"{names.get(name, name)} (재혼합 항목의 {ts.get(f'data.{key}_prob', 0):.0%})")
+    return (", ".join(used) + " · 학습에만 사용, 출처·사용 범위는 아래 외부 데이터 표") if used \
+        else "없음 (배포 train 데이터만)"
+
+
 def render_reproduce(data: dict) -> str:
     if not data["rounds"]:
         return "_아직 제출 기록이 없습니다._"
@@ -146,12 +161,13 @@ def render_reproduce(data: dict) -> str:
         ("손실 함수", f"`{w.get('loss')}`"),
         ("seed", str(w.get("seed"))),
         ("학습 epoch", f"{w.get('epochs_completed')} epoch 실행 ({w.get('stop_reason')}), "
-                     f"**{w.get('best_epoch')} epoch 가중치 선택** "
-                     f"({w.get('selection') or 'Validation PESQ 최고'})"),
+                     f"**{w.get('best_epoch')} epoch 가중치 선택**"),
+        ("제출 가중치의 선택 근거", w.get("selection") or "학습 중 Validation PESQ-WB가 가장 높은 epoch"),
         ("선택 가중치의 검증 점수", f"학습 중 Validation PESQ-WB {w.get('best_val_pesq_training'):.4f} "
                              f"(float 출력) · 제출 경로(16비트 WAV) {v.get('pesq', float('nan')):.4f}"
          if w.get("best_val_pesq_training") is not None else f"{v.get('pesq')}"),
         ("학습 설정", settings),
+        *([("외부 데이터", outside_data(ts))] if any(k.startswith("data.external_") for k in ts) else []),
         ("학습 명령", f"`{cmd}`"),
         ("학습 환경", f"PyTorch {w.get('torch')}, {w.get('device')}"),
         ("출처", w.get("source") or w.get("run_id") or "-"),

@@ -52,14 +52,14 @@ PLACEHOLDER = re.compile(r"TODO|TBD|\?\?\?")
 # Parts added between the form's Part 2 and Part 3: (key, title, guidance)
 EXTRA_PARTS = [
     ("algorithm", "Part 3. 모델·학습 방법 이해",
-     "(사용한 딥러닝 모델의 구조와 입출력, 손실 함수와 학습 설정의 핵심 원리, "
-     "그 방법을 선택한 이유를 적어주세요.)"),
+     "(모델 구조와 학습 방법의 핵심 원리, 그 방법을 선택한 이유. 최초 제출: 모델과 학습 방법을 "
+     "선택한 이유 / 이후 제출: 이전 회차 대비 달라진 점)"),
     ("references", "Part 4. 참고 문헌",
-     "(직접 확인한 문헌·논문의 제목, 저자, 연도, 링크 또는 DOI와 구현에 참고한 내용. "
-     "외부 코드를 활용했다면 출처를 함께 적어주세요.)"),
+     "(직접 확인한 문헌·논문·외부 코드·사전학습 가중치·데이터의 출처(버전)와 활용한 부분. "
+     "외부 데이터는 사용한 범위(분할·폴드)와 학습·검증에 각각 어떻게 썼는지)"),
     ("results", "Part 5. 개선 결과",
-     "(최초 제출: 접근 방법과 결과 / 이후 제출: 이전 제출 대비 방법론의 변화와 "
-     "변경 전후 Validation의 PESQ 및 SNR 비교)"),
+     "(변경 전후 Validation의 PESQ-WB 및 SNR 비교. 최초 제출: 접근 방법과 결과 / 이후 제출: "
+     "이전 회차 대비 달라진 점과 검증 결과)"),
     ("analysis", "Part 6. 분석 및 고찰",
      "(스펙트로그램과 청취로 확인한 잡음 감소와 말소리 보존, 남은 한계와 개선 방향)"),
 ]
@@ -147,10 +147,17 @@ def validate_spec(spec: dict) -> list[str]:
             problems.append(f"참고 문헌 {rid}: checked_by 비어 있음 — 팀원이 원문을 직접 확인한 뒤 이름 기입")
         if r.get("doi") and not r.get("doi_verified"):
             problems.append(f"참고 문헌 {rid}: DOI 미확인 → python tools/check_refs.py")
+    if not spec.get("external_code"):
+        problems.append("external_code 비어 있음 (외부 코드·사전학습 가중치·데이터의 출처·버전·활용 범위, "
+                        "쓰지 않았다면 그 사실)")
     res = spec.get("results") or {}
-    if len(res.get("rows") or []) < 2:
+    rows = res.get("rows") or []
+    if len(rows) < 2:
         problems.append("results.rows 2개 이상 필요 (변경 전후 비교)")
-    else:
+    elif sum(r.get("split", "validation") == "validation" and not str(r.get("source", "")).endswith("/train")
+             for r in rows) < 2:
+        problems.append("results.rows에 Validation 행 2개 이상 필요 (변경 전후 Validation PESQ-WB·SNR)")
+    if rows:
         try:
             results_table(res["rows"])
         except Exception as e:

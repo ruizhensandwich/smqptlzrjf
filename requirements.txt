@@ -1,5 +1,7 @@
-# Needed to run denoise.py (inference). CPU is enough; a CUDA build of torch is used if installed.
-torch>=2.1
-numpy>=1.26,<3
-scipy>=1.12,<2
-soundfile>=0.12,<1
+# Needed to run denoise.py (inference), exact versions checked by tools/check_submission.py
+# in a fresh Python 3.12 venv. CPU is enough; a CUDA build of torch is used if installed.
+# If the submission model needs another package (e.g. einops), add it here with its version.
+torch==2.15.0
+numpy==2.5.5
+scipy==1.18.1
+soundfile==0.14.0

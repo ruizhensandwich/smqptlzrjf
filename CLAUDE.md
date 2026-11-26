@@ -6,6 +6,20 @@ validation 164쌍·화자 5명, 3초, 잡음 범주 23개, SNR 0/5/10/15 dB).
 저장소: https://github.com/ruizhensandwich/smqptlzrjf (공개, 조교가 clone해서 실행). 배포 노트북:
 `~/Downloads/deep_learning_noise_reduction_challenge/` (MaskCNN 예제, 배포 가중치 validation 1.692).
 
+## 일정·평가 (2차 챌린지 공지, 사용자 전달 2026-11-26)
+- 챌린지 11-18 ~ **12-13** (KST, `tools/common.py` `DEADLINE`), **최종 보고서 12-14 마감**, 결과 이의 신청 12-14부터.
+- 히든 테스트 **483개**, 배포 train·validation에 **없는 잡음도 포함**. 순위 = 파일별 PESQ-WB 평균(파일마다 같은 가중치), 보조 = SNR.
+  리더보드는 검증을 마친 제출 중 팀별 최고 점수.
+- 최종 성적 = 순위 점수 + 최종 보고서(알고리즘 이해, 실험·검증의 충실성, 결과 해석의 타당성).
+- **최종 보고서:** A4 10쪽 내외, 본문 맑은 고딕·나눔고딕 같은 글꼴 11 pt 통일. 담을 것:
+  1. 진행 과정(초기 접근, 회차별 변경과 이유, 기대에 못 미친 실험에서 확인한 점)
+  2. 알고리즘(Noisy → 복원 음성의 처리 과정, 입력 표현·모델 구조·손실·후처리 중 중요했던 선택과 이유, 흐름도·구조도)
+  3. 데이터와 학습 설정(학습·검증 데이터 구성, 전처리·증강, 주요 설정, 모델·가중치 선택 기준, 외부 자료 출처·범위)
+  4. 실험 결과와 분석(같은 Validation 조건에서 예제 모델·이전 제출·주요 실험·최종 모델의 PESQ-WB·SNR 표, 대표 사례의 처리 전후 스펙트로그램과 청취: 줄어든 잡음, 말소리 보존, 성능이 떨어진 조건)
+  5. 한계와 개선 방향(취약한 잡음 조건, 다음 개선 방법), 최종 제출 커밋·태그, 참고 문헌
+  → 그래서 모든 실험은 `--note`에 무엇을 왜 바꿨는지 남기고, 기대에 못 미친 실험도 결과를 기록한다(보고서 1·4절 재료).
+- **매 제출 전 확인 8항목**은 `tools/check_submission.py`가 공지 번호 그대로 점검한다(아래 "제출 절차").
+
 ## 절대 규칙
 - **PESQ를 높이는 수단은 가리지 않는다** (조교 답변, 사용자 전달 2026-11-25): 공개 pretrained 가중치, 후처리, 외부 데이터 모두 허용. 지킬 것은 제출 입출력 계약, 추론 중 다운로드 금지(가중치는 저장소 안에), 출처·라이선스 표기(README "사용한 공개 코드"·외부 데이터 표와 내역서).
 - 후처리에 쓸 기법은 사용자가 나중에 정한다(2026-11-25). 정해지기 전에는 후처리를 넣지 않는다.
@@ -13,11 +27,13 @@ validation 164쌍·화자 5명, 3초, 잡음 범주 23개, SNR 0/5/10/15 dB).
 - **추론은 `weights/submission.pt` 하나로.** 추론 중 다운로드 금지. 가중치 파일 95 MB 이하(GitHub 100 MB 한도).
 - **런타임(denoise.py)은 noisy만 읽는다.** clean은 학습(`train.py`)과 채점(`evaluate.py`, `tools/`)에서만.
 - **공개 금지:** `data/`(수강생 녹음), 모든 음성 파일, `docs/ai_usage/`(내역서), 인증 정보(서비스 계정 키, SSH 키, 토큰, `.env`). `.gitignore` + `tools/secret_scan.py`(pre-push 훅, `git config core.hooksPath .githooks`)로 막는다.
-- **외부 공개 데이터(음성·잡음)를 학습에 쓸 수 있다** (조교 답변, 사용자 전달 2026-11-23). 학습에만 쓰고, 출처·라이선스를 README에 적고, 저장소에는 올리지 않는다.
-- **공개 pretrained 가중치는 제출에 써도 된다** (조교 답변, 2026-11-25. 그 전 11-23에는 미확인이라 제출에서 뺐다). 쓰면 출처·라이선스·그 가중치의 학습 데이터를 README의 "사용한 공개 코드" 표와 내역서에 적는다. 이어 학습한 가중치는 `release.py`가 README 재현 블록에 "시작 가중치"(설정의 `init_weights`와 그 파일의 `source`)를 자동으로 적고, `check_submission.py` 5c가 README에 그 파일의 출처가 있는지 본다. 받은 원본 가중치는 이 저장소 형식으로 바꿔(`tools/promote.py --state-dict`) `weights/pretrained/`에 둔다(95 MB 이하).
+- **외부 공개 데이터(음성·잡음)를 학습에 쓸 수 있다** (조교 답변 2026-11-23, 공지 2026-11-26). 저장소에는 올리지 않고, README 외부 데이터 표에 **출처·버전, 라이선스, 사용 범위(분할·폴드), 학습에 쓴 방식, 검증에 쓴 방식**을 각각 적는다(공지). 새 외부 데이터를 쓰면 그 표에 한 줄을 추가하고 `tools/check_submission.py`의 `OUTSIDE_DATA`에 설정 이름 → README 표기 이름을 넣는다.
+- **공개 코드·사전학습 가중치는 출처, 버전(커밋·파일), 적용 방식**을 README "사용한 공개 코드" 표에 적는다(공지).
+- **실행 안내(공지):** README에 Python 버전(3.12), 패키지와 버전, 설치·추론 명령. `requirements.txt`는 확인한 버전을 `==`로 고정한다(torch 2.15.0, numpy 2.5.5, scipy 1.18.1, soundfile 0.14.0). 제출 모델이 다른 패키지(예: `einops`)를 쓰면 버전과 함께 추가하고 `check_submission.py`로 새 환경 설치를 확인한다. 가중치는 100 MB 미만이라 Git LFS를 쓰지 않는다(쓰게 되면 점검 3이 LFS 포인터를 잡는다).
+- **공개 pretrained 가중치는 제출에 써도 된다** (조교 답변, 2026-11-25. 그 전 11-23에는 미확인이라 제출에서 뺐다). 쓰면 출처·라이선스·그 가중치의 학습 데이터를 README의 "사용한 공개 코드" 표와 내역서에 적는다. 이어 학습한 가중치는 `release.py`가 README 재현 블록에 "시작 가중치"(설정의 `init_weights`와 그 파일의 `source`)를 자동으로 적고, `check_submission.py` 7c가 README에 그 파일의 출처가 있는지 본다. 받은 원본 가중치는 이 저장소 형식으로 바꿔(`tools/promote.py --state-dict`) `weights/pretrained/`에 둔다(95 MB 이하).
 - **validation은 새 화자만 잰다.** validation의 잡음 원본(NOISEX-92 14개, Nonspeech 47개)은 전부 train에도 있다(2026-11-23 확인). 새 잡음에 대한 일반화는 **새 잡음 검증셋**(`data/newnoise/`: validation clean 164개 + 같은 SNR + ESC-50 fold 5 잡음, `tools/make_newnoise.py`)으로 따로 잰다. **ESC-50 fold 5는 학습에 절대 쓰지 않는다**(외부 잡음으로 학습할 때는 fold 1~4나 다른 출처).
 - **학습은 매 epoch의 가중치를 남긴다** (`train.save_every_epoch`, 기본값 true, `runs/<id>/epoch_NNNN.pt`; 사용자 요청 2026-11-25: 87 epoch를 고르고 싶었지만 저장본이 없었다).
-- **가중치 선택은 validation PESQ 최고 epoch** (공지 권장). validation과 어려운 검증셋(`data/hard/`)을 둘 다 주요 지표로 본다(사용자 결정 2026-11-26). 히든 테스트의 화자·잡음 구성은 알려지지 않았다. 알려진 것은 "1차보다 어렵다"뿐이다(조교).
+- **가중치 선택은 validation PESQ 최고 epoch** (공지 권장). validation과 어려운 검증셋(`data/hard/`)을 둘 다 주요 지표로 본다(사용자 결정 2026-11-26). 히든 테스트는 483개이고 배포 데이터에 없는 잡음도 들어 있다(공지 2026-11-26). 화자 구성은 알려지지 않았고, 조교는 "1차보다 어렵다"고 했다. 그래서 새 잡음 검증셋·어려운 검증셋의 점수를 validation과 함께 본다. README에는 제출 가중치의 **선택 근거**를 적는다(`release.py`가 설정의 `selection` 또는 "Validation PESQ 최고 epoch"를 재현 블록에 쓴다).
 - **AI 참고 문헌은 실재·내용을 직접 확인한 것만.** `docs/references.json`의 `checked_by`는 사람이 채운다.
 - push: 일반 커밋과 제출 태그는 Claude가 push한다(사용자 요청). 런어스 비밀글 제출은 팀장이 직접.
 
@@ -72,9 +88,14 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
 ## 제출 절차 (팀당 주 1회, 최초 제출은 횟수 제외)
 1. `pytest` 통과 → `tools/promote.py runs/<id>` → `weights/submission.pt`
 2. `evaluate.py --round N` → `release.py prepare N --summary "..."`
-3. `docs/ai_usage/roundN.json`(최초: 접근 방법·AI 활용·검증 / 이후: 이전 대비 방법론 변화·AI 활용·검증 결과, results.rows에 `round{N-1}` vs `roundN`) → `build_ai_usage.py`
+3. `docs/ai_usage/roundN.json` → `build_ai_usage.py`. 공지가 요구하는 내용: 사용한 AI 모델과 목적, 핵심 질문과 답변 요약(cases), 모델 구조·학습 방법의 핵심 원리와 선택 이유(algorithm; 최초는 선택한 이유, 이후는 이전 회차 대비 달라진 점), AI 제안을 직접 검증·수정한 부분(cases.verify), 변경 전후 **Validation** PESQ-WB·SNR(results.rows, Validation 행 2개 이상: `round{N-1}` vs `roundN`), 직접 확인한 문헌·외부 코드·사전학습 가중치·데이터의 출처와 활용 부분(references, external_code). AI를 쓰지 않은 회차는 미사용 사실과 직접 한 실험·검증 결과.
 4. 커밋 → `release.py tag N` → `release.py push N` (secret scan 후 main + 태그 push)
-5. `check_submission.py --round N` → READY
+5. `check_submission.py --round N` → READY. **공지의 "매 제출 전 확인" 8항목을 같은 번호로 점검한다:**
+   1 requirements.txt의 패키지·버전 표기 + 새 가상환경 설치 · 2 제출 태그를 **GitHub에서 새로 clone**해 README 명령(`python denoise.py`)으로 실행 ·
+   3 가중치·설정 포함, 95 MB 이하, Git LFS 포인터가 아닌 실제 파일 · 4 추론 코드에 개인 PC 절대 경로·다운로드 없음 ·
+   5 `input/`의 모든 WAV → `output/` 바로 아래 같은 이름 하나씩 · 6 16 kHz·모노·48,000 표본, 입력과 같은 형식(6+ 재채점 = 저장 결과) ·
+   7 GitHub 공개 접근, 태그 GitHub = 로컬, README의 팀명·회차·태그, Python·패키지 버전, 가중치 경로, 학습 설정·선택 근거·Validation 결과, 외부 코드·데이터·가중치의 출처·범위 ·
+   8 이번 버전의 Validation·Train 결과(코드 지문 일치)와 AI 활용 내역서. 그 밖에 공개 범위(보안 검사)와 주 1회 제출 횟수.
 6. 팀장이 런어스 → 질의응답 비밀글: 저장소 링크 + 태그 `submission-N`(커밋 해시) + 내역서 hwpx
 7. `release.py submitted N`, 리더보드 공개 후 `release.py leaderboard N --pesq X`
 

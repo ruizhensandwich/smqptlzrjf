@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 CHALLENGE = "2026 신호 및 시스템 2차 챌린지 - 딥러닝 음성 잡음 제거"
-DEADLINE = None            # not announced yet; set "YYYY-MM-DD HH:MM" when it is
+DEADLINE = "2026-12-13 23:59"     # challenge ends (KST); final report due 2026-12-14
 TEAM = "7조"
 REPO_URL = "https://github.com/ruizhensandwich/smqptlzrjf"
 TAG_PREFIX = "submission-"

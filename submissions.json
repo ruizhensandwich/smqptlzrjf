@@ -2,7 +2,7 @@
   "team": "7조",
   "repository": "https://github.com/ruizhensandwich/smqptlzrjf",
   "challenge": "2026 신호 및 시스템 2차 챌린지 - 딥러닝 음성 잡음 제거",
-  "deadline": null,
+  "deadline": "2026-12-13 23:59",
   "rounds": [
     {
       "round": 1,

@@ -34,6 +34,7 @@ validation 164쌍·화자 5명, 3초, 잡음 범주 23개, SNR 0/5/10/15 dB).
 - **validation은 새 화자만 잰다.** validation의 잡음 원본(NOISEX-92 14개, Nonspeech 47개)은 전부 train에도 있다(2026-11-23 확인). 새 잡음에 대한 일반화는 **새 잡음 검증셋**(`data/newnoise/`: validation clean 164개 + 같은 SNR + ESC-50 fold 5 잡음, `tools/make_newnoise.py`)으로 따로 잰다. **ESC-50 fold 5는 학습에 절대 쓰지 않는다**(외부 잡음으로 학습할 때는 fold 1~4나 다른 출처).
 - **학습은 매 epoch의 가중치를 남긴다** (`train.save_every_epoch`, 기본값 true, `runs/<id>/epoch_NNNN.pt`; 사용자 요청 2026-11-25: 87 epoch를 고르고 싶었지만 저장본이 없었다).
 - **가중치 선택은 validation PESQ 최고 epoch** (공지 권장). validation과 어려운 검증셋(`data/hard/`)을 둘 다 주요 지표로 본다(사용자 결정 2026-11-26). 히든 테스트는 483개이고 배포 데이터에 없는 잡음도 들어 있다(공지 2026-11-26). 화자 구성은 알려지지 않았고, 조교는 "1차보다 어렵다"고 했다. 그래서 새 잡음 검증셋·어려운 검증셋의 점수를 validation과 함께 본다. README에는 제출 가중치의 **선택 근거**를 적는다(`release.py`가 설정의 `selection` 또는 "Validation PESQ 최고 epoch"를 재현 블록에 쓴다).
+- **5단계 이어 학습의 가중치 선택·조기 종료는 '새 잡음 + 어려운 newlow'** (사용자 결정 2026-11-27): 설정 `train.select_by: ["newnoise", "hard:newlow"]`(두 묶음 평균 PESQ의 평균, 기본값은 `["validation"]`). validation PESQ는 기록만 한다. `init_weights`가 있으면 시작 가중치를 0 epoch로 먼저 채점해 첫 `best.pt`로 둔다(못 넘으면 공개 가중치가 선택됨). `train.ema_decay > 0`이면 가중치 이동 평균을 `epoch_NNNN_ema.pt`·`best_ema.pt`로 저장하고 매 epoch 같이 채점한다(학습 자체는 바뀌지 않음). **이어 학습한 멤버의 채택은 단독 점수가 아니라 기존 앙상블(L 0.5 + F 0.2 + M 0.3 크기 평균 + PCS 0.5)에 넣었을 때의 4종 검증셋 점수로 판단한다.** 주의: 두 선택 묶음은 모두 ESC-50 fold 5라, fold 1~4로 학습한 실행에 유리하게 보일 수 있다.
 - **AI 참고 문헌은 실재·내용을 직접 확인한 것만.** `docs/references.json`의 `checked_by`는 사람이 채운다.
 - push: 일반 커밋과 제출 태그는 Claude가 push한다(사용자 요청). 런어스 비밀글 제출은 팀장이 직접.
 
@@ -47,6 +48,7 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
 | 테스트 | `python -m pytest -q` |
 | 학습 (끝나면 자동 채점 + 모델 비교표) | `python train.py --config configs/X.json --tag T [--set train.lr=5e-4] --note "..."` |
 | 이어서 학습 | `python train.py --resume runs/<run_id>` |
+| 공개 가중치와 이어 학습 가중치 사이 보간 (WiSE-FT) | `python tools/interpolate.py --base weights/pretrained/X.pt --tuned runs/<id>/best.pt --alpha 0.25 0.5 0.75 --out runs/wise/X_{alpha}.pt` (alpha = 이어 학습 쪽 비율, `epoch_NNNN_ema.pt`도 가능) |
 | 재혼합 재료 확인 (noisy − clean이 깨끗한 잡음인지) | `python tools/check_mixing.py` → `results/mixing_check/` |
 | 채점 (16비트 출력 기준) | `python evaluate.py --weights runs/<id>/best.pt --split all --tag T` |
 | 새 잡음 검증셋 만들기 / 채점 | `python tools/make_newnoise.py [--fetch]` → `data/newnoise/` / `python evaluate.py --weights W --split newnoise --tag T` (`--split all`은 있으면 함께 채점) |
@@ -74,7 +76,7 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
 - `se/arch/xlstm_senet/`: xLSTM-SENet(공개 코드 그대로 + `__init__.py`의 `enhance()` 래퍼, `einops` 필요). 이 저장소에서는 추론만 한다(학습은 팀원의 별도 하네스에서 했고 그 학습 코드는 이 저장소에 없다). `se/models.py`의 `ensemble`은 여러 모델을 한 파일에 담아 출력을 평균한다.
 - 새 모델: `se/arch/<이름>.py` → `se/models.py`의 MODELS에 한 줄(손실이 새로 필요하면 `se/losses.py`) → `configs/<이름>.json` → train → evaluate. MP-SENet 계열(analysis/forward/synthesis 인터페이스)은 손실 `mpsenet`과 판별기를 그대로 쓴다.
 - 동적 재혼합(`se/data.py` `RemixedSpeech`): train 쌍의 잡음(noisy − clean)을 다른 train 발화에 무작위 SNR로 섞는다. train 데이터만, 메모리에서만. 재료 기준은 `REMIX_LIMITS`(2026-11-22 확인: 1,296개 모두 지연 0·SNR 오차 0.002 dB 이내, 잡음이 대부분 무음인 6개만 제외).
-- `train.py`는 `data/newnoise/`가 있으면 매 epoch 새 잡음 PESQ도 재서 `history.csv`의 `newnoise_pesq`에 적는다. 보기만 하고, 가중치 선택은 여전히 validation PESQ.
+- `train.py`는 `data/newnoise/`가 있으면 매 epoch 새 잡음 PESQ도 재서 `history.csv`의 `newnoise_pesq`에 적는다. 가중치 선택은 `train.select_by`(기본 validation)가 정하고, 거기 적힌 묶음(`hard:newlow` → `hard_newlow_pesq`)과 선택 점수(`select_pesq`), EMA 점수(`ema_*`)도 같은 파일에 적힌다. `se/ema.py` = 가중치 이동 평균.
 - `results/experiments.csv`(채점 기록), `results/training_runs.csv`(학습 기록), `results/model_board.csv`·`.md`(모델 비교표), `results/submissions/roundN/` 커밋함. `runs/`는 git 제외.
 - **모델 비교표**(`tools/model_board.py`): validation 전체를 채점한 모든 모델을 한 표에 (Val PESQ·ΔPESQ·SNR, 0 dB·15 dB·hard, 입력보다 나빠진 파일 비율, Train PESQ, 일반화 차 = train 개선 − validation 개선, 학습 epoch·시간, 추론 속도) + 모델별 장점·단점(다른 모델 대비 자동 판정, 잡음 범주는 train 기준). evaluate.py와 train.py 출력 끝에 찍힌다. 같은 가중치는 한 줄.
 - `submissions.json`과 README의 `<!-- submissions -->`·`<!-- reproduce -->` 블록은 `release.py`가 쓴다. 직접 편집 금지.

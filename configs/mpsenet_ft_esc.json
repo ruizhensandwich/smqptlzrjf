@@ -1,0 +1,19 @@
+{
+  "model": "mpsenet",
+  "model_args": {"n_fft": 400, "hop": 100, "win": 400, "dense_channel": 64, "num_tsblocks": 4,
+                 "n_heads": 4, "beta": 2.0, "compress_factor": 0.3, "source_axes": true},
+  "loss": "mpsenet",
+  "discriminator": "metric",
+  "init_weights": "weights/pretrained/mpsenet_dns.pt",
+  "data": {"segment_seconds": 2.0, "remix_prob": 0.5, "remix_snr_db": [-5.0, 20.0],
+           "gain_db": [0.0, 0.0],
+           "external_noise": "esc50", "external_noise_prob": 0.5},
+  "train": {
+    "seed": 1234, "batch_size": 4, "val_batch_size": 4,
+    "optimizer": "adamw", "lr": 0.0001, "adam_betas": [0.8, 0.99], "weight_decay": 0.01,
+    "scheduler": "exponential", "lr_gamma": 0.99,
+    "max_epochs": 40, "min_epochs": 10, "patience": 10, "min_delta": 0.01,
+    "select_by": ["newnoise", "hard:newlow"], "ema_decay": 0.999
+  },
+  "note": "Stage 5, experiment 2. One data change against mpsenet_pretrained_dns (fine-tune of the MP-SENet DNS public weights): half of the remixed items take their noise from ESC-50 folds 1-4 (so 50 % as recorded, 25 % course noise remixed, 25 % ESC-50 noise), SNR range unchanged at [-5, 20] dB. Fold 5 (newnoise and hard:newlow) is not in the pool, but it is the same 50 classes, so the selection score favours this run. Harness changes as in experiment 1: epoch 0 score of the start weights, selection by newnoise + hard:newlow, weight average 0.999."
+}

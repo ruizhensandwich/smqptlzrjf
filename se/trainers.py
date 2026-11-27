@@ -16,6 +16,7 @@ import torch
 from torch.nn import functional as F
 
 from se.arch.metric_discriminator import DISCRIMINATORS
+from se.ema import WeightAverage
 from se.losses import LOSSES, METRIC_WEIGHT, mpsenet_terms, weighted
 from se.metrics import pesq_pair
 
@@ -39,6 +40,8 @@ class Trainer:
         self.loss_fn = LOSSES[cfg["loss"]]
         self.optimizer = make_optimizer(model.parameters(), self.t)
         self.scheduler = make_scheduler(self.optimizer, self.t)
+        # running average of the weights (se/ema.py); it watches only, training is unchanged
+        self.ema = WeightAverage(model, self.t["ema_decay"]) if self.t["ema_decay"] > 0 else None
 
     @property
     def lr(self) -> float:
@@ -53,6 +56,8 @@ class Trainer:
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
+            if self.ema is not None:
+                self.ema.update(self.model)
             total += loss.item() * noisy.size(0)
         return {"train_loss": total / len(loader.dataset)}
 
@@ -66,14 +71,18 @@ class Trainer:
             scheduler.step()
 
     def end_epoch(self, val_pesq: float) -> None:
+        """val_pesq = the score weights are selected by (train.select_by)."""
         self._step(self.scheduler, val_pesq)
 
     def state_dict(self) -> dict:
-        return {"optimizer": self.optimizer.state_dict(), "scheduler": self.scheduler.state_dict()}
+        return {"optimizer": self.optimizer.state_dict(), "scheduler": self.scheduler.state_dict(),
+                **({"ema": self.ema.state_dict()} if self.ema is not None else {})}
 
     def load_state_dict(self, state: dict) -> None:
         self.optimizer.load_state_dict(state["optimizer"])
         self.scheduler.load_state_dict(state["scheduler"])
+        if self.ema is not None and state.get("ema") is not None:
+            self.ema.load_state_dict(state["ema"])
 
 
 class MetricGANTrainer(Trainer):
@@ -129,6 +138,8 @@ class MetricGANTrainer(Trainer):
             loss = weighted(terms) + METRIC_WEIGHT * metric
             loss.backward()
             self.optimizer.step()
+            if self.ema is not None:
+                self.ema.update(self.model)
 
             sums["train_loss"] += loss.item() * b
             sums["disc_loss"] += loss_d.item() * b

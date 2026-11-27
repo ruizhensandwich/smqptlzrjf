@@ -39,9 +39,16 @@ TRAIN_DEFAULTS = {
     "scheduler": "plateau",   # plateau (lr_factor, lr_patience, min_lr) | exponential (lr_gamma)
     "lr_gamma": 0.99,         # exponential: lr *= lr_gamma after every epoch
     "val_batch_size": 0,      # 0 = batch_size
+    # The score that picks best.pt, stops early and drives the plateau schedule: the mean of
+    # the mean PESQ-WB of these sets. "validation" | "newnoise" | "hard:newlow" (split:subset,
+    # subset = noise_difficulty in that split's samples.csv) | "lowband:esc_low" ...
+    "select_by": ["validation"],
+    "ema_decay": 0.0,         # > 0: also keep a running average of the weights (se/ema.py)
 }
 
 # Training data. The defaults are the course example: every pair whole, as recorded.
+SELECT_SPLITS = ("validation", "newnoise", "hard", "lowband")
+
 DATA_DEFAULTS = {
     "segment_seconds": 0.0,          # > 0: a random segment of this length per item
     "remix_prob": 0.0,               # share of items whose noise comes from another train pair
@@ -113,6 +120,12 @@ def validate(cfg: dict) -> dict:
             or not 0 < t["lr_gamma"] <= 1 or t["val_batch_size"] < 0:
         raise ValueError("train: optimizer adam|adamw, scheduler plateau|exponential, "
                          "0 < lr_gamma <= 1, val_batch_size >= 0")
+    sets = t["select_by"]
+    if not isinstance(sets, list) or not sets or len(set(sets)) != len(sets) or any(
+            not isinstance(s, str) or s.split(":")[0] not in SELECT_SPLITS or s.count(":") > 1
+            or s.endswith(":") for s in sets) or not 0 <= t["ema_decay"] < 1:
+        raise ValueError(f"train: select_by is a list of {SELECT_SPLITS} or split:subset without "
+                         "repeats, 0 <= ema_decay < 1")
     if t["batch_size"] <= 0 or not 0 < t["min_lr"] <= t["lr"]:
         raise ValueError("batch_size > 0 and 0 < min_lr <= lr are required")
     if not 1 <= t["min_epochs"] <= t["max_epochs"] or t["patience"] <= 0:

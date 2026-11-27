@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import csv
 import os
+from copy import copy
 from fractions import Fraction
 from hashlib import sha256
 from io import StringIO
@@ -131,6 +132,16 @@ class PairedSpeech(Dataset):
         self.split = split
         self.manifest = read_manifest(split, self.root)
         self.waveforms = torch.from_numpy(load_waveforms(split, self.root, rebuild))
+
+    def subset(self, name: str) -> "PairedSpeech":
+        """The files whose noise_difficulty is `name` (e.g. "newlow" of the hard split)."""
+        keep = [i for i, r in enumerate(self.manifest) if r["noise_difficulty"] == name]
+        if not keep:
+            raise ValueError(f"{self.split}: no file with noise_difficulty {name!r}")
+        out = copy(self)
+        out.manifest = [self.manifest[i] for i in keep]
+        out.waveforms = self.waveforms[keep]
+        return out
 
     def __len__(self):
         return len(self.manifest)

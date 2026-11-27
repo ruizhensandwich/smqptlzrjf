@@ -1,0 +1,20 @@
+{
+  "model": "mpsenet",
+  "model_args": {"n_fft": 400, "hop": 100, "win": 400, "dense_channel": 64, "num_tsblocks": 4,
+                 "n_heads": 4, "beta": 2.0, "compress_factor": 0.3, "source_axes": true},
+  "loss": "mpsenet",
+  "discriminator": "metric",
+  "init_weights": "weights/pretrained/mpsenet_dns.pt",
+  "data": {"segment_seconds": 2.0, "remix_prob": 0.5, "remix_snr_db": [-5.0, 20.0],
+           "gain_db": [0.0, 0.0],
+           "external_noise": "esc50", "external_noise_prob": 0.5,
+           "external_speech": "zeroth", "external_speech_prob": 0.5},
+  "train": {
+    "seed": 1234, "batch_size": 4, "val_batch_size": 4,
+    "optimizer": "adamw", "lr": 0.0001, "adam_betas": [0.8, 0.99], "weight_decay": 0.01,
+    "scheduler": "exponential", "lr_gamma": 0.99,
+    "max_epochs": 40, "min_epochs": 10, "patience": 10, "min_delta": 0.003,
+    "select_by": ["newnoise", "hard:newlow"], "ema_decay": 0.999
+  },
+  "note": "Stage 5, experiment 3. One data change against experiment 2 (mpsenet_ft_esc): half of the remixed items take their speech from Zeroth-Korean (OpenSLR 40, CC BY 4.0; 6,096 clips of 105 speakers) instead of the course clean file, so 50 % as recorded, 25 % course speech remixed, 25 % Zeroth speech remixed; noise of remixed items is course / ESC-50 folds 1-4 half and half as in experiment 2. Also min_delta 0.003 instead of 0.01 (user decision): experiment 2 stopped at epoch 22 while still rising, so compare at epoch 22 as well as at the selected epoch."
+}

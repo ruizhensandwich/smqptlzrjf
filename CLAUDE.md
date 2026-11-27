@@ -243,6 +243,12 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
   - 코드: `se/arch/tflocoformer`의 `level`(기본 "none" = 공개 모델 그대로), `se/models.py` `Ensemble`의 `combine="mag"`·`phase_member`·`pcs`, `se/pcs.py`. `requirements.txt`에 einops 0.8.2, rotary-embedding-torch 0.6.1, packaging 26.3 추가(새 Python 3.12 venv에서 설치 후 `denoise.py --weights` 실행 확인).
     피크가 최대값을 넘는 출력은 쓰기 전에 [−1, 32767/32768]로 잘린다(테스트 `tests/test_mix_pcs.py`, 정수 넘침 없음).
   - **아직 `weights/submission.pt`는 1회차 그대로다.** 제출하려면 `tools/promote.py`가 아니라 이 파일을 `weights/submission.pt`로 두고 "제출 절차" 2번부터(`evaluate.py --round 2` …). README 재현 블록과 `check_submission.py` 7c(시작 가중치 출처)는 ensemble 멤버 표기를 처리하는지 제출 때 확인.
+- **5단계 첫 관문: MP-SENet DNS 이어 학습 두 실험**(2026-11-27, 표 전체 `results/stage5/report.md`). 대조 설정 `mpsenet_pretrained_dns`에서 데이터 설정 하나씩만 바꿈, 선택 = 새 잡음 + newlow(0 epoch 2.919), EMA 0.999.
+  실험 1 `configs/mpsenet_ft_lowsnr.json`(재혼합 SNR [-10, 15]): 16 epoch 중 11 선택, 선택 점수 2.944. 실험 2 `configs/mpsenet_ft_esc.json`(재혼합 잡음 절반이 ESC-50 fold 1~4): 22 epoch 중 22 선택, 3.040.
+  - **주력 앙상블 + PCS 0.5의 M 자리에 넣은 점수(validation / 새 잡음 / 어려운 / 저역)**: 공개 가중치 3.476 / 3.602 / 2.635 / 3.317, 실험 1 3.504 / 3.637 / 2.652 / 3.332, **실험 2 3.505 / 3.654 / 2.663 / 3.350**(차이 +0.029 / +0.052 / +0.027 / +0.034, 95 % 구간 모두 0 위, SNR +0.1~0.2 dB). EMA는 best와 0.003 이내.
+  - 실험 2는 모든 묶음에서 실험 1 이상이고 ESC-50이 아닌 babble(+0.044)·synth_low(+0.040)에서도 오른다. 실험 1은 처음 듣는 잡음의 낮은 SNR(newlow +0.004, esc_low_snr +0.003, 새 잡음 0 dB −0.020)이 오르지 않았다. 잔향은 둘 다 −0.007(그대로).
+  - 기존 `mpsenet_dns_ft`(SNR [-5, 20])를 앙상블에 넣은 점수는 재지 않아, 실험 1의 이득이 SNR 범위 덕인지 이어 학습 자체의 몫인지는 가르지 못했다.
+  - 멤버 단독: 실험 2 3.308 / 3.471 / 2.395 / 3.050(공개 가중치 3.176 / 3.336 / 2.308 / 2.940). 가중치 `weights/candidates/mpsenet_ft_{lowsnr,esc}{,_ema}.pt`. 실험 2는 EMA가 끝까지 오르던 중에 조기 종료됐다. 제출 후보는 아직 `mix_lfm_mag_pcs05.pt` 그대로(다음 단계는 사용자 결정 대기).
 - 학습 곡선의 모양: 60 epoch쯤 3.0, 80 epoch 이후 시간당 +0.03 이하, 막바지에 train만 오르고 validation이 멈춤.
   중단 조건은 `min_delta 0.01`, `patience 25`, `min_epochs 40`, `max_epochs 150`(사용자와 합의), 끝나면 VM 정지.
 

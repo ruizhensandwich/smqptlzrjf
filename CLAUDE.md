@@ -249,6 +249,12 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
   - 실험 2는 모든 묶음에서 실험 1 이상이고 ESC-50이 아닌 babble(+0.044)·synth_low(+0.040)에서도 오른다. 실험 1은 처음 듣는 잡음의 낮은 SNR(newlow +0.004, esc_low_snr +0.003, 새 잡음 0 dB −0.020)이 오르지 않았다. 잔향은 둘 다 −0.007(그대로).
   - 기존 `mpsenet_dns_ft`(SNR [-5, 20])를 앙상블에 넣은 점수는 재지 않아, 실험 1의 이득이 SNR 범위 덕인지 이어 학습 자체의 몫인지는 가르지 못했다.
   - 멤버 단독: 실험 2 3.308 / 3.471 / 2.395 / 3.050(공개 가중치 3.176 / 3.336 / 2.308 / 2.940). 가중치 `weights/candidates/mpsenet_ft_{lowsnr,esc}{,_ema}.pt`. 실험 2는 EMA가 끝까지 오르던 중에 조기 종료됐다. 제출 후보는 아직 `mix_lfm_mag_pcs05.pt` 그대로(다음 단계는 사용자 결정 대기).
+- **5단계 대조군과 실험 3(Zeroth)**(2026-11-28, `results/stage5/report.md` 뒷부분). 앙상블 + PCS 0.5의 M 자리 점수(validation / 새 잡음 / 어려운 / 저역):
+  대조군 `mpsenet_dns_ft` 3.511 / 3.612 / 2.630 / 3.326 = **validation만 오른다**(+0.035; 새 잡음 +0.010·어려운 −0.006·저역 +0.009는 구간이 0 포함, newlow −0.044, synth_low +0.064).
+  실험 1은 대조군보다 새 잡음 +0.025, 어려운 +0.022(선택 기준도 달라 SNR 하향만의 효과는 아님), 실험 2는 +0.043 / +0.033 / 저역 +0.025.
+  실험 3 `configs/mpsenet_ft_esc_zeroth.json`(실험 2 + 재혼합 말소리 절반 Zeroth, min_delta 0.003, 40 epoch 중 32 선택, 선택 점수 3.042): **3.504 / 3.647 / 2.655 / 3.347, 실험 2 대비 −0.002 / −0.007 / −0.008 / −0.003**
+  (babble −0.032, 구간 −0.043~−0.022; 같은 22 epoch끼리도 같음). **Zeroth 추가는 이득이 없다.** 선택 점수는 25 epoch 이후 3.02~3.04에서 정체. 가중치 `weights/candidates/mpsenet_ft_esc_zeroth{,_ema}.pt`.
+  MP-SENet 멤버의 현재 최선은 실험 2(`mpsenet_ft_esc.pt`). 제출 후보 교체와 다음 단계(판별기 비교, WiSE-FT, 잔향 증강)는 사용자 결정 대기.
 - 학습 곡선의 모양: 60 epoch쯤 3.0, 80 epoch 이후 시간당 +0.03 이하, 막바지에 train만 오르고 validation이 멈춤.
   중단 조건은 `min_delta 0.01`, `patience 25`, `min_epochs 40`, `max_epochs 150`(사용자와 합의), 끝나면 VM 정지.
 

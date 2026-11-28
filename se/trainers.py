@@ -19,7 +19,7 @@ from torch.nn import functional as F
 
 from se.arch.metric_discriminator import DISCRIMINATORS
 from se.ema import WeightAverage
-from se.losses import LOSSES, METRIC_WEIGHT, mpsenet_terms, weighted
+from se.losses import LOSSES, METRIC_WEIGHT, MPSENET_WEIGHTS, mpsenet_terms, weighted
 from se.metrics import pesq_pair
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -96,12 +96,16 @@ class MetricGANTrainer(Trainer):
     2. discriminator step: D(clean, clean) -> 1 and D(clean, enhanced) -> (PESQ - 1) / 3.5
        (the second part is skipped when PESQ fails on a segment, e.g. one without speech);
     3. generator step: weighted magnitude, phase, complex, consistency and time losses
-       plus METRIC_WEIGHT * (D(clean, enhanced) - 1)^2.
+       plus METRIC_WEIGHT * (D(clean, enhanced) - 1)^2. The config's loss_weights replaces
+       the weights it names (training only; the validation loss keeps the source's weights).
     """
 
     def __init__(self, model, cfg: dict, device, pool=None):
         super().__init__(model, cfg, device, pool)
         self.pool = pool
+        self.weights = {**MPSENET_WEIGHTS, "metric": METRIC_WEIGHT, **cfg["loss_weights"]}
+        if cfg["loss_weights"]:
+            print(f"loss weights: {self.weights}", flush=True)
         self.disc = DISCRIMINATORS[cfg["discriminator"]]().to(device)
         if cfg["init_discriminator"]:       # published discriminator weights as the start
             start = torch.load(ROOT / cfg["init_discriminator"], map_location=device,
@@ -145,7 +149,7 @@ class MetricGANTrainer(Trainer):
 
             self.optimizer.zero_grad()
             metric = F.mse_loss(self.disc(aux["clean_mag"], aux["mag_hat"]).flatten(), ones)
-            loss = weighted(terms) + METRIC_WEIGHT * metric
+            loss = weighted(terms, self.weights) + self.weights["metric"] * metric
             loss.backward()
             self.optimizer.step()
             if self.ema is not None:

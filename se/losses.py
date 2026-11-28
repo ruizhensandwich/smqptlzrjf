@@ -63,8 +63,8 @@ def mpsenet_terms(model, noisy: torch.Tensor, clean: torch.Tensor):
     return terms, {"clean": clean, "audio": audio, "clean_mag": clean_mag, "mag_hat": mag_hat}
 
 
-def weighted(terms: dict) -> torch.Tensor:
-    return sum(MPSENET_WEIGHTS[k] * v for k, v in terms.items())
+def weighted(terms: dict, weights: dict = MPSENET_WEIGHTS) -> torch.Tensor:
+    return sum(weights[k] * v for k, v in terms.items())
 
 
 def mpsenet(model, noisy: torch.Tensor, clean: torch.Tensor) -> torch.Tensor:

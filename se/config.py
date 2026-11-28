@@ -69,6 +69,11 @@ DEFAULTS = {
     "discriminator": "",      # "" | "metric" (PESQ-predicting discriminator, se/trainers.py)
     "init_discriminator": "", # start the discriminator from this file ({"state_dict", "source"},
                               # path from the repository root) instead of random weights
+    "loss_weights": {},       # other weights for the generator's loss terms in training, e.g.
+                              # {"pha": 0.1, "metric": 0.2}; terms not named keep the source's
+                              # weights (se/losses.py MPSENET_WEIGHTS and METRIC_WEIGHT). Needs the
+                              # metric discriminator. The validation loss keeps the source's
+                              # weights, so it stays comparable between runs.
     "init_weights": "",       # start from this checkpoint (path from the repository root) instead
                               # of random weights; its model and model_args must equal this config's
     "data": DATA_DEFAULTS,
@@ -103,6 +108,12 @@ def validate(cfg: dict) -> dict:
                          "needs the loss 'mpsenet'")
     if cfg["init_discriminator"] and not cfg["discriminator"]:
         raise ValueError("init_discriminator needs a discriminator")
+    from se.losses import MPSENET_WEIGHTS
+    lw = cfg["loss_weights"]
+    if not isinstance(lw, dict) or (lw and not cfg["discriminator"])             or any(k not in (*MPSENET_WEIGHTS, "metric") for k in lw)             or any(isinstance(v, bool) or not isinstance(v, (int, float)) or v < 0
+                   for v in lw.values()):
+        raise ValueError(f"loss_weights: non-negative numbers for {[*MPSENET_WEIGHTS, 'metric']}, "
+                         "and it needs a discriminator")
     d = cfg["data"]
     if not 0 <= d["speed_prob"] <= 1 or any(not 0.5 <= f <= 2 for f in d["speed_factors"]) \
             or (d["speed_prob"] > 0 and not (d["speed_factors"] and d["remix_prob"] > 0)):

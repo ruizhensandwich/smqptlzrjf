@@ -1,0 +1,59 @@
+{
+  "model": "mpsenet",
+  "model_args": {
+    "n_fft": 400,
+    "hop": 100,
+    "win": 400,
+    "dense_channel": 64,
+    "num_tsblocks": 4,
+    "n_heads": 4,
+    "beta": 2.0,
+    "compress_factor": 0.3,
+    "source_axes": true
+  },
+  "loss": "mpsenet",
+  "discriminator": "metric",
+  "init_discriminator": "weights/pretrained/metric_discriminator_semamba.pt",
+  "loss_weights": {
+    "metric": 0.2
+  },
+  "init_weights": "weights/pretrained/mpsenet_dns.pt",
+  "data": {
+    "segment_seconds": 2.0,
+    "remix_prob": 0.5,
+    "remix_snr_db": [
+      -5.0,
+      20.0
+    ],
+    "gain_db": [
+      0.0,
+      0.0
+    ],
+    "external_noise": "esc50",
+    "external_noise_prob": 0.5
+  },
+  "train": {
+    "seed": 1234,
+    "batch_size": 4,
+    "val_batch_size": 4,
+    "optimizer": "adamw",
+    "lr": 0.0001,
+    "adam_betas": [
+      0.8,
+      0.99
+    ],
+    "weight_decay": 0.01,
+    "scheduler": "exponential",
+    "lr_gamma": 0.99,
+    "max_epochs": 40,
+    "min_epochs": 10,
+    "patience": 10,
+    "min_delta": 0.01,
+    "select_by": [
+      "newnoise",
+      "hard:newlow"
+    ],
+    "ema_decay": 0.999
+  },
+  "note": "Stage 5, experiment 6. One change against experiment 5 (mpsenet_ft_esc_pdisc): the weight of the generator's metric-discriminator term is 0.2 instead of 0.05. In experiment 5 this term was about 1 % of the loss value (phase about 90 %), and the published discriminator's prediction follows PESQ (correlation 0.84), so the question is whether a stronger pull toward predicted PESQ helps. Early stopping as in experiments 2 and 5."
+}

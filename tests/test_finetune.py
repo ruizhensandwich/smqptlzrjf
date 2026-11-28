@@ -195,3 +195,26 @@ def test_discriminator_can_start_from_a_file(tmp_path, monkeypatch):
     assert all(torch.equal(v, start.state_dict()[k]) for k, v in tr.disc.state_dict().items())
     with pytest.raises(ValueError):
         validate(apply_overrides(DEFAULTS, ['init_discriminator="d.pt"']))
+
+
+def test_loss_weights_replace_only_the_named_terms():
+    import se.trainers as trainers
+    from se.losses import METRIC_WEIGHT, MPSENET_WEIGHTS, weighted
+    args = {"dense_channel": 8, "num_tsblocks": 1, "n_heads": 2}
+    base = ['model="mpsenet"', f"model_args={json.dumps(args)}", 'loss="mpsenet"',
+            'discriminator="metric"']
+    build = lambda extra: trainers.build_trainer(
+        build_model("mpsenet", args), validate(apply_overrides(DEFAULTS, base + extra)),
+        torch.device("cpu"))
+    assert build([]).weights == {**MPSENET_WEIGHTS, "metric": METRIC_WEIGHT}
+    tr = build(['loss_weights={"pha": 0.1, "metric": 0.2}'])
+    assert tr.weights == {**MPSENET_WEIGHTS, "pha": 0.1, "metric": 0.2}
+    terms = {k: torch.tensor(float(i + 1)) for i, k in enumerate(MPSENET_WEIGHTS)}
+    assert torch.isclose(weighted(terms, tr.weights) - weighted(terms),
+                         torch.tensor((0.1 - MPSENET_WEIGHTS["pha"]) * float(terms["pha"])))
+    for bad in ('loss_weights={"phase": 0.1}', 'loss_weights={"pha": -1}',
+                'loss_weights={"pha": "0.1"}'):
+        with pytest.raises(ValueError):
+            validate(apply_overrides(DEFAULTS, base + [bad]))
+    with pytest.raises(ValueError):             # only the trainer with a discriminator applies it
+        validate(apply_overrides(DEFAULTS, [base[0], base[1], base[2], 'loss_weights={"pha": 0.1}']))

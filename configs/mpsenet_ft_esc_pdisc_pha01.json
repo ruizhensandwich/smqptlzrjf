@@ -1,0 +1,59 @@
+{
+  "model": "mpsenet",
+  "model_args": {
+    "n_fft": 400,
+    "hop": 100,
+    "win": 400,
+    "dense_channel": 64,
+    "num_tsblocks": 4,
+    "n_heads": 4,
+    "beta": 2.0,
+    "compress_factor": 0.3,
+    "source_axes": true
+  },
+  "loss": "mpsenet",
+  "discriminator": "metric",
+  "init_discriminator": "weights/pretrained/metric_discriminator_semamba.pt",
+  "loss_weights": {
+    "pha": 0.1
+  },
+  "init_weights": "weights/pretrained/mpsenet_dns.pt",
+  "data": {
+    "segment_seconds": 2.0,
+    "remix_prob": 0.5,
+    "remix_snr_db": [
+      -5.0,
+      20.0
+    ],
+    "gain_db": [
+      0.0,
+      0.0
+    ],
+    "external_noise": "esc50",
+    "external_noise_prob": 0.5
+  },
+  "train": {
+    "seed": 1234,
+    "batch_size": 4,
+    "val_batch_size": 4,
+    "optimizer": "adamw",
+    "lr": 0.0001,
+    "adam_betas": [
+      0.8,
+      0.99
+    ],
+    "weight_decay": 0.01,
+    "scheduler": "exponential",
+    "lr_gamma": 0.99,
+    "max_epochs": 40,
+    "min_epochs": 10,
+    "patience": 10,
+    "min_delta": 0.01,
+    "select_by": [
+      "newnoise",
+      "hard:newlow"
+    ],
+    "ema_decay": 0.999
+  },
+  "note": "Stage 5, experiment 7. One change against experiment 5 (mpsenet_ft_esc_pdisc): the weight of the phase term is 0.1 instead of 0.3. The main mix takes only this member's magnitude (phase comes from TF-Locoformer) and the phase term is about 90 % of the loss value, so the question is whether less weight on phase leaves more for the magnitude. Early stopping as in experiments 2 and 5."
+}

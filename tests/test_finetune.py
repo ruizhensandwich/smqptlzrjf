@@ -177,3 +177,21 @@ def test_interpolation_ends_at_both_files_and_is_linear_between(tmp_path, tiny_w
     made = read_checkpoint(tmp_path / "w_0.25.pt")
     assert made["meta"]["wise_ft"]["alpha"] == 0.25 and made["meta"]["best_epoch"] == 3
     assert "0.75 x" in made["meta"]["source"] and (tmp_path / "w_0.75.pt").is_file()
+
+
+def test_discriminator_can_start_from_a_file(tmp_path, monkeypatch):
+    import se.trainers as trainers
+    from se.arch.metric_discriminator import MetricDiscriminator
+    torch.manual_seed(3)
+    start = MetricDiscriminator()
+    torch.save({"state_dict": start.state_dict(), "source": "test"}, tmp_path / "d.pt")
+    monkeypatch.setattr(trainers, "ROOT", tmp_path)
+    args = {"dense_channel": 8, "num_tsblocks": 1, "n_heads": 2}
+    cfg = validate(apply_overrides(DEFAULTS, ['model="mpsenet"', f"model_args={json.dumps(args)}",
+                                              'loss="mpsenet"', 'discriminator="metric"',
+                                              'init_discriminator="d.pt"']))
+    torch.manual_seed(4)
+    tr = trainers.build_trainer(build_model("mpsenet", args), cfg, torch.device("cpu"))
+    assert all(torch.equal(v, start.state_dict()[k]) for k, v in tr.disc.state_dict().items())
+    with pytest.raises(ValueError):
+        validate(apply_overrides(DEFAULTS, ['init_discriminator="d.pt"']))

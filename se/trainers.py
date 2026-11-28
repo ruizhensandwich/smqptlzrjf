@@ -11,6 +11,8 @@ PESQ stalls) | exponential (lr *= lr_gamma every epoch).
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import torch
 from torch.nn import functional as F
@@ -19,6 +21,8 @@ from se.arch.metric_discriminator import DISCRIMINATORS
 from se.ema import WeightAverage
 from se.losses import LOSSES, METRIC_WEIGHT, mpsenet_terms, weighted
 from se.metrics import pesq_pair
+
+ROOT = Path(__file__).resolve().parent.parent
 
 
 def make_optimizer(params, t: dict):
@@ -99,6 +103,12 @@ class MetricGANTrainer(Trainer):
         super().__init__(model, cfg, device, pool)
         self.pool = pool
         self.disc = DISCRIMINATORS[cfg["discriminator"]]().to(device)
+        if cfg["init_discriminator"]:       # published discriminator weights as the start
+            start = torch.load(ROOT / cfg["init_discriminator"], map_location=device,
+                               weights_only=True)
+            self.disc.load_state_dict(start["state_dict"])
+            print(f"discriminator starts from {cfg['init_discriminator']} ({start['source']})",
+                  flush=True)
         self.optimizer_d = make_optimizer(self.disc.parameters(), self.t)
         self.scheduler_d = make_scheduler(self.optimizer_d, self.t)
 

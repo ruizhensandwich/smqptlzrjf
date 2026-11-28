@@ -67,6 +67,8 @@ DEFAULTS = {
     "model_args": {},
     "loss": "log_mag_l1",
     "discriminator": "",      # "" | "metric" (PESQ-predicting discriminator, se/trainers.py)
+    "init_discriminator": "", # start the discriminator from this file ({"state_dict", "source"},
+                              # path from the repository root) instead of random weights
     "init_weights": "",       # start from this checkpoint (path from the repository root) instead
                               # of random weights; its model and model_args must equal this config's
     "data": DATA_DEFAULTS,
@@ -99,6 +101,8 @@ def validate(cfg: dict) -> dict:
                                  or cfg["loss"] != "mpsenet"):
         raise ValueError(f"discriminator must be '' or one of {sorted(DISCRIMINATORS)} and "
                          "needs the loss 'mpsenet'")
+    if cfg["init_discriminator"] and not cfg["discriminator"]:
+        raise ValueError("init_discriminator needs a discriminator")
     d = cfg["data"]
     if not 0 <= d["speed_prob"] <= 1 or any(not 0.5 <= f <= 2 for f in d["speed_factors"]) \
             or (d["speed_prob"] > 0 and not (d["speed_factors"] and d["remix_prob"] > 0)):

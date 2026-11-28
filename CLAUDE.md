@@ -254,7 +254,13 @@ GPU 서버(GCP 서울 리전 L4/T4 할당량 1 — 프로젝트는 로컬 `gclou
   실험 1은 대조군보다 새 잡음 +0.025, 어려운 +0.022(선택 기준도 달라 SNR 하향만의 효과는 아님), 실험 2는 +0.043 / +0.033 / 저역 +0.025.
   실험 3 `configs/mpsenet_ft_esc_zeroth.json`(실험 2 + 재혼합 말소리 절반 Zeroth, min_delta 0.003, 40 epoch 중 32 선택, 선택 점수 3.042): **3.504 / 3.647 / 2.655 / 3.347, 실험 2 대비 −0.002 / −0.007 / −0.008 / −0.003**
   (babble −0.032, 구간 −0.043~−0.022; 같은 22 epoch끼리도 같음). **Zeroth 추가는 이득이 없다.** 선택 점수는 25 epoch 이후 3.02~3.04에서 정체. 가중치 `weights/candidates/mpsenet_ft_esc_zeroth{,_ema}.pt`.
-  MP-SENet 멤버의 현재 최선은 실험 2(`mpsenet_ft_esc.pt`). 제출 후보 교체와 다음 단계(판별기 비교, WiSE-FT, 잔향 증강)는 사용자 결정 대기.
+- **5단계 판별기 비교**(2026-11-28, `results/stage5/report.md` 끝). 실험 2에서 판별기만 바꿈(조기 종료 기준 동일). 설정 `init_discriminator`(판별기를 파일에서 시작, `se/trainers.py`).
+  실험 4 `configs/mpsenet_ft_esc_nodisc.json`(판별기 없음, 32 epoch 중 31 선택, 선택 점수 3.038)과 실험 5 `configs/mpsenet_ft_esc_pdisc.json`
+  (SEMamba 공개 판별기 `weights/pretrained/metric_discriminator_semamba.pt`에서 시작, 32 epoch 중 22 선택, 3.065, EMA 3.062). 앙상블 + PCS 0.5의 M 자리(validation / 새 잡음 / 어려운 / 저역):
+  실험 4 EMA 3.506 / 3.655 / 2.658 / 3.353 = **실험 2와 같다**(어려운만 −0.005): 무작위 판별기는 이어 학습에서 거의 기여하지 않는다.
+  **실험 5 EMA 3.511 / 3.660 / 2.665 / 3.360** = 실험 2 대비 +0.006 / +0.006 / +0.003 / +0.010(95 % 구간 모두 0 위, 크기는 작음), 공개 가중치 앙상블 대비 +0.035 / +0.058 / +0.030 / +0.044.
+  멤버 단독 3.335 / 3.491 / 2.415 / 3.094(실험 2 대비 +0.02~+0.045). 공개 판별기는 우리 STFT 입력에서 PESQ 목표와 상관 0.84. **MP-SENet 멤버의 현재 최선은 실험 5 EMA**(`weights/candidates/mpsenet_ft_esc_pdisc_ema.pt`).
+  제출 후보 교체와 다음 단계(WiSE-FT, 잔향 증강)는 사용자 결정 대기.
 - 학습 곡선의 모양: 60 epoch쯤 3.0, 80 epoch 이후 시간당 +0.03 이하, 막바지에 train만 오르고 validation이 멈춤.
   중단 조건은 `min_delta 0.01`, `patience 25`, `min_epochs 40`, `max_epochs 150`(사용자와 합의), 끝나면 VM 정지.
 
